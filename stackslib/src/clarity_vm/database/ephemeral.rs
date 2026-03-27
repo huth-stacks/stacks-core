@@ -435,19 +435,21 @@ impl ClarityBackingStore for EphemeralMarfStore<'_> {
         self.get_with_fn(
             key,
             |ephemeral_marf, tip, key| {
-                let Some(marf_value) = Self::handle_marf_result(ephemeral_marf.get(tip, key))? else {
-                    return Ok(None)
+                let Some(marf_value) = Self::handle_marf_result(ephemeral_marf.get(tip, key))?
+                else {
+                    return Ok(None);
                 };
-                let side_key = marf_value.to_hex();
-                let data = SqliteConnection::get(ephemeral_marf.sqlite_conn(), &side_key)?
-                    .ok_or_else(|| {
-                        VmInternalError::Expect(format!(
-                            "ERROR: MARF contained value_hash not found in side storage: {side_key}",
-                        ))
-                    })?;
+                let data =
+                    SqliteConnection::get(ephemeral_marf.sqlite_conn(), marf_value.as_bytes())?
+                        .ok_or_else(|| {
+                            VmInternalError::Expect(format!(
+                                "ERROR: MARF contained value_hash not found in side storage: {}",
+                                marf_value.to_hex(),
+                            ))
+                        })?;
                 Ok(Some(data))
             },
-            |read_only_marf, key| read_only_marf.get_data(key)
+            |read_only_marf, key| read_only_marf.get_data(key),
         )
     }
 
@@ -469,19 +471,19 @@ impl ClarityBackingStore for EphemeralMarfStore<'_> {
                 else {
                     return Ok(None);
                 };
-                let side_key = marf_value.to_hex();
                 trace!(
                     "Ephemeral MarfedKV get side-key for {:?}: {:?}",
                     hash,
-                    &side_key
+                    marf_value.to_hex()
                 );
-                let data = SqliteConnection::get(ephemeral_marf.sqlite_conn(), &side_key)?
-                    .ok_or_else(|| {
-                        VmInternalError::Expect(format!(
+                let data =
+                    SqliteConnection::get(ephemeral_marf.sqlite_conn(), marf_value.as_bytes())?
+                        .ok_or_else(|| {
+                            VmInternalError::Expect(format!(
                         "ERROR: Ephemeral MARF contained value_hash not found in side storage: {}",
-                        side_key
+                        marf_value.to_hex()
                     ))
-                    })?;
+                        })?;
                 Ok(Some(data))
             },
             |read_only_marf, path| read_only_marf.get_data_from_path(path),
@@ -509,14 +511,14 @@ impl ClarityBackingStore for EphemeralMarfStore<'_> {
                 else {
                     return Ok(None);
                 };
-                let side_key = marf_value.to_hex();
-                let data = SqliteConnection::get(ephemeral_marf.sqlite_conn(), &side_key)?
-                    .ok_or_else(|| {
-                        VmInternalError::Expect(format!(
-                            "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
-                        ))
-                    })?;
+                let data =
+                    SqliteConnection::get(ephemeral_marf.sqlite_conn(), marf_value.as_bytes())?
+                        .ok_or_else(|| {
+                            VmInternalError::Expect(format!(
+                                "ERROR: MARF contained value_hash not found in side storage: {}",
+                                marf_value.to_hex()
+                            ))
+                        })?;
                 Ok(Some((data, proof.serialize_to_vec())))
             },
             |read_only_marf, key| read_only_marf.get_data_with_proof(key),
@@ -544,14 +546,14 @@ impl ClarityBackingStore for EphemeralMarfStore<'_> {
                 else {
                     return Ok(None);
                 };
-                let side_key = marf_value.to_hex();
-                let data = SqliteConnection::get(ephemeral_marf.sqlite_conn(), &side_key)?
-                    .ok_or_else(|| {
-                        VmInternalError::Expect(format!(
-                            "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
-                        ))
-                    })?;
+                let data =
+                    SqliteConnection::get(ephemeral_marf.sqlite_conn(), marf_value.as_bytes())?
+                        .ok_or_else(|| {
+                            VmInternalError::Expect(format!(
+                                "ERROR: MARF contained value_hash not found in side storage: {}",
+                                marf_value.to_hex()
+                            ))
+                        })?;
                 Ok(Some((data, proof.serialize_to_vec())))
             },
             |read_only_marf, path| read_only_marf.get_data_with_proof_from_path(path),
@@ -690,7 +692,7 @@ impl ClarityBackingStore for EphemeralMarfStore<'_> {
             let marf_value = MARFValue::from_value(&value);
             SqliteConnection::put(
                 self.ephemeral_marf.sqlite_tx(),
-                &marf_value.to_hex(),
+                marf_value.as_bytes(),
                 &value,
             )
             .unwrap_or_else(|e| {

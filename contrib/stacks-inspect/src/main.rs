@@ -552,7 +552,7 @@ fn main() {
             if let Some(value) = value_opt {
                 let conn = sqlite_open(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY, false)
                     .expect("Failed to open DB");
-                let args = params![&value.to_hex()];
+                let args = params![value.as_bytes().to_vec()];
                 let res: Result<String, SqliteError> = conn.query_row_and_then(
                     "SELECT value FROM __fork_storage WHERE value_hash = ?1",
                     args,

@@ -680,27 +680,27 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
         version INTEGER NOT NULL,
         total_burn TEXT NOT NULL,       -- converted to/from u64
         total_work TEXT NOT NULL,       -- converted to/from u64
-        proof TEXT NOT NULL,
-        parent_block TEXT NOT NULL,             -- hash of parent Stacks block
-        parent_microblock TEXT NOT NULL,
+        proof BLOB NOT NULL,
+        parent_block BLOB NOT NULL,             -- hash of parent Stacks block
+        parent_microblock BLOB NOT NULL,
         parent_microblock_sequence INTEGER NOT NULL,
-        tx_merkle_root TEXT NOT NULL,
-        state_index_root TEXT NOT NULL,
-        microblock_pubkey_hash TEXT NOT NULL,
+        tx_merkle_root BLOB NOT NULL,
+        state_index_root BLOB NOT NULL,
+        microblock_pubkey_hash BLOB NOT NULL,
 
-        block_hash TEXT NOT NULL,                   -- NOTE: this is *not* unique, since two burn chain forks can commit to the same Stacks block.
-        index_block_hash TEXT UNIQUE NOT NULL,      -- NOTE: this is the hash of the block hash and consensus hash of the burn block that selected it,
+        block_hash BLOB NOT NULL,                   -- NOTE: this is *not* unique, since two burn chain forks can commit to the same Stacks block.
+        index_block_hash BLOB UNIQUE NOT NULL,      -- NOTE: this is the hash of the block hash and consensus hash of the burn block that selected it,
                                                     -- and is guaranteed to be globally unique (across all Stacks forks and across all PoX forks).
                                                     -- index_block_hash is the block hash fed into the MARF index.
 
         -- internal use only
         block_height INTEGER NOT NULL,
-        index_root TEXT NOT NULL,                    -- root hash of the internal, not-consensus-critical MARF that allows us to track chainstate /fork metadata
-        consensus_hash TEXT UNIQUE NOT NULL,         -- all consensus hashes are guaranteed to be unique
-        burn_header_hash TEXT NOT NULL,              -- burn header hash corresponding to the consensus hash (NOT guaranteed to be unique, since we can have 2+ blocks per burn block if there's a PoX fork)
+        index_root BLOB NOT NULL,                    -- root hash of the internal, not-consensus-critical MARF that allows us to track chainstate /fork metadata
+        consensus_hash BLOB UNIQUE NOT NULL,         -- all consensus hashes are guaranteed to be unique
+        burn_header_hash BLOB NOT NULL,              -- burn header hash corresponding to the consensus hash (NOT guaranteed to be unique, since we can have 2+ blocks per burn block if there's a PoX fork)
         burn_header_height INT NOT NULL,             -- height of the burnchain block header that generated this consensus hash
         burn_header_timestamp INT NOT NULL,          -- timestamp from burnchain block header that generated this consensus hash
-        parent_block_id TEXT NOT NULL,               -- NOTE: this is the parent index_block_hash
+        parent_block_id BLOB NOT NULL,               -- NOTE: this is the parent index_block_hash
 
         cost TEXT NOT NULL,
         block_size TEXT NOT NULL,       -- converted to/from u64
@@ -713,10 +713,10 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
     -- no designated primary key since there can be duplicate entries
     CREATE TABLE payments(
         address TEXT NOT NULL,              -- miner that produced this block and microblock stream
-        block_hash TEXT NOT NULL,
-        consensus_hash TEXT NOT NULL,
-        parent_block_hash TEXT NOT NULL,
-        parent_consensus_hash TEXT NOT NULL,
+        block_hash BLOB NOT NULL,
+        consensus_hash BLOB NOT NULL,
+        parent_block_hash BLOB NOT NULL,
+        parent_consensus_hash BLOB NOT NULL,
         coinbase TEXT NOT NULL,             -- encodes u128
         tx_fees_anchored TEXT NOT NULL,     -- encodes u128
         tx_fees_streamed TEXT NOT NULL,     -- encodes u128
@@ -727,7 +727,7 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
 
         -- internal use
         stacks_block_height INTEGER NOT NULL,
-        index_block_hash TEXT NOT NULL,     -- NOTE: can't enforce UNIQUE here, because there will be multiple entries per block
+        index_block_hash BLOB NOT NULL,     -- NOTE: can't enforce UNIQUE here, because there will be multiple entries per block
         vtxindex INT NOT NULL               -- user burn support vtxindex
     );"#,
     r#"
@@ -735,8 +735,8 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
     CREATE TABLE user_supporters(
         address TEXT NOT NULL,
         support_burn INT NOT NULL,
-        block_hash TEXT NOT NULL,
-        consensus_hash TEXT NOT NULL,
+        block_hash BLOB NOT NULL,
+        consensus_hash BLOB NOT NULL,
 
         PRIMARY KEY(address,block_hash,consensus_hash)
     );"#,
@@ -748,12 +748,12 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     -- Staging microblocks -- preprocessed microblocks queued up for subsequent processing and inclusion in the chunk store.
-    CREATE TABLE staging_microblocks(anchored_block_hash TEXT NOT NULL,     -- this is the hash of the parent anchored block
-                                     consensus_hash TEXT NOT NULL,          -- this is the hash of the burn chain block that holds the parent anchored block's block-commit
-                                     index_block_hash TEXT NOT NULL,        -- this is the anchored block's index hash
-                                     microblock_hash TEXT NOT NULL,
-                                     parent_hash TEXT NOT NULL,             -- previous microblock
-                                     index_microblock_hash TEXT NOT NULL,   -- this is the hash of consensus_hash and microblock_hash
+    CREATE TABLE staging_microblocks(anchored_block_hash BLOB NOT NULL,     -- this is the hash of the parent anchored block
+                                     consensus_hash BLOB NOT NULL,          -- this is the hash of the burn chain block that holds the parent anchored block's block-commit
+                                     index_block_hash BLOB NOT NULL,        -- this is the anchored block's index hash
+                                     microblock_hash BLOB NOT NULL,
+                                     parent_hash BLOB NOT NULL,             -- previous microblock
+                                     index_microblock_hash BLOB NOT NULL,   -- this is the hash of consensus_hash and microblock_hash
                                      sequence INT NOT NULL,
                                      processed INT NOT NULL,
                                      orphaned INT NOT NULL,
@@ -761,33 +761,33 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     -- Staging microblocks data
-    CREATE TABLE staging_microblocks_data(block_hash TEXT NOT NULL,
+    CREATE TABLE staging_microblocks_data(block_hash BLOB NOT NULL,
                                           block_data BLOB NOT NULL,
                                           PRIMARY KEY(block_hash)
     );"#,
     r#"
     -- Invalidated staging microblocks data
-    CREATE TABLE invalidated_microblocks_data(block_hash TEXT NOT NULL,
+    CREATE TABLE invalidated_microblocks_data(block_hash BLOB NOT NULL,
                                               block_data BLOB NOT NULL,
                                               PRIMARY KEY(block_hash)
     );"#,
     r#"
     -- Staging blocks -- preprocessed blocks queued up for subsequent processing and inclusion in the chunk store.
-    CREATE TABLE staging_blocks(anchored_block_hash TEXT NOT NULL,
-                                parent_anchored_block_hash TEXT NOT NULL,
-                                consensus_hash TEXT NOT NULL,
+    CREATE TABLE staging_blocks(anchored_block_hash BLOB NOT NULL,
+                                parent_anchored_block_hash BLOB NOT NULL,
+                                consensus_hash BLOB NOT NULL,
                                 -- parent_consensus_hash is the consensus hash of the sortition that chose the parent Stacks block.
-                                parent_consensus_hash TEXT NOT NULL,
-                                parent_microblock_hash TEXT NOT NULL,
+                                parent_consensus_hash BLOB NOT NULL,
+                                parent_microblock_hash BLOB NOT NULL,
                                 parent_microblock_seq INT NOT NULL,
-                                microblock_pubkey_hash TEXT NOT NULL,
+                                microblock_pubkey_hash BLOB NOT NULL,
                                 height INT NOT NULL,
                                 attachable INT NOT NULL,            -- set to 1 if this block's parent is processed; 0 if not
                                 orphaned INT NOT NULL,              -- set to 1 if this block can never be attached
                                 processed INT NOT NULL,
                                 commit_burn INT NOT NULL,
                                 sortition_burn INT NOT NULL,
-                                index_block_hash TEXT NOT NULL,           -- used internally; hash of consensus hash and anchored_block_hash
+                                index_block_hash BLOB NOT NULL,           -- used internally; hash of consensus hash and anchored_block_hash
                                 download_time INT NOT NULL,               -- how long the block was in-flight
                                 arrival_time INT NOT NULL,                -- when this block was stored
                                 processed_time INT NOT NULL,              -- when this block was processed
@@ -796,8 +796,8 @@ const CHAINSTATE_INITIAL_SCHEMA: &[&str] = &[
     r#"
     CREATE TABLE transactions(
         id INTEGER PRIMARY KEY,
-        txid TEXT NOT NULL,
-        index_block_hash TEXT NOT NULL,
+        txid BLOB NOT NULL,
+        index_block_hash BLOB NOT NULL,
         tx_hex TEXT NOT NULL,
         result TEXT NOT NULL,
         UNIQUE (txid,index_block_hash)
@@ -809,7 +809,7 @@ const CHAINSTATE_SCHEMA_2: &[&str] = &[
     // table of blocks that applied an epoch transition
     r#"
     CREATE TABLE epoch_transitions(
-        block_id TEXT PRIMARY KEY
+        block_id BLOB PRIMARY KEY
     );"#,
     r#"
     UPDATE db_config SET version = "2";
@@ -837,8 +837,8 @@ const CHAINSTATE_SCHEMA_3: &[&str] = &[
         tx_fees_streamed_produced TEXT NOT NULL,
 
         -- fork identifier
-        child_index_block_hash TEXT NOT NULL,
-        parent_index_block_hash TEXT NOT NULL,
+        child_index_block_hash BLOB NOT NULL,
+        parent_index_block_hash BLOB NOT NULL,
 
         -- there are two rewards records per (parent,child) pair. One will have a non-zero coinbase; the other will have a 0 coinbase.
         PRIMARY KEY(parent_index_block_hash,child_index_block_hash,coinbase)
@@ -860,7 +860,7 @@ const CHAINSTATE_SCHEMA_3: &[&str] = &[
     CREATE TABLE burnchain_txids(
         -- in epoch 2.x, this is the index block hash of the Stacks block.
         -- in epoch 3.x, this is the index block hash of the tenure-start block.
-        index_block_hash TEXT PRIMARY KEY,
+        index_block_hash BLOB PRIMARY KEY,
         -- this is a JSON-encoded list of txids
         txids TEXT NOT NULL
     );"#,
@@ -3303,31 +3303,23 @@ pub mod test {
         );
 
         // Verify data integrity
-        let row: Option<(String, String, String)> = conn
+        let row: Option<(BlockHeaderHash, ConsensusHash, String)> = conn
             .query_row(
                 "SELECT block_hash, consensus_hash, block_size
             FROM block_headers WHERE index_block_hash = ?",
                 params![&sample_index_block_hash],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                    ))
-                },
+                |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, String>(2)?)),
             )
             .optional()?;
         assert!(row.is_some(), "Sample data should remain after migration");
 
         let (block_hash, consensus_hash, block_size) = row.unwrap();
         assert_eq!(
-            block_hash,
-            sample_block_hash.to_string(),
+            block_hash, sample_block_hash,
             "Block hash should be preserved"
         );
         assert_eq!(
-            consensus_hash,
-            sample_consensus_hash.to_string(),
+            consensus_hash, sample_consensus_hash,
             "Consensus hash should be preserved"
         );
         assert_eq!(block_size, "1000", "Block size should be preserved");

@@ -56,9 +56,7 @@ use crate::chainstate::nakamoto::staging_blocks::{
 };
 use crate::chainstate::nakamoto::tenure::NakamotoTenureEvent;
 use crate::chainstate::nakamoto::tests::node::TestStacker;
-use crate::chainstate::nakamoto::{
-    query_row, NakamotoBlock, NakamotoBlockHeader, NakamotoChainState,
-};
+use crate::chainstate::nakamoto::{NakamotoBlock, NakamotoBlockHeader, NakamotoChainState};
 use crate::chainstate::stacks::boot::{
     NakamotoSignerEntry, RewardSet, MINERS_NAME, SIGNERS_VOTING_FUNCTION_NAME, SIGNERS_VOTING_NAME,
 };
@@ -75,6 +73,7 @@ use crate::core::{StacksEpochExtension, STACKS_EPOCH_3_0_MARKER};
 use crate::net::codec::test::check_codec_and_corruption;
 use crate::net::stackerdb::MINER_SLOT_COUNT;
 use crate::util_lib::boot::boot_code_id;
+use crate::util_lib::db::query_row;
 use crate::util_lib::strings::StacksString;
 
 impl NakamotoStagingBlocksConnRef<'_> {

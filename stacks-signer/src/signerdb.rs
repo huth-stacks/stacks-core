@@ -393,9 +393,9 @@ pub struct SignerDb {
 static CREATE_BLOCKS_TABLE_1: &str = "
 CREATE TABLE IF NOT EXISTS blocks (
     reward_cycle INTEGER NOT NULL,
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     block_info TEXT NOT NULL,
-    consensus_hash TEXT NOT NULL,
+    consensus_hash BLOB NOT NULL,
     signed_over INTEGER NOT NULL,
     stacks_height INTEGER NOT NULL,
     burn_block_height INTEGER NOT NULL,
@@ -405,9 +405,9 @@ CREATE TABLE IF NOT EXISTS blocks (
 static CREATE_BLOCKS_TABLE_2: &str = "
 CREATE TABLE IF NOT EXISTS blocks (
     reward_cycle INTEGER NOT NULL,
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     block_info TEXT NOT NULL,
-    consensus_hash TEXT NOT NULL,
+    consensus_hash BLOB NOT NULL,
     signed_over INTEGER NOT NULL,
     broadcasted INTEGER,
     stacks_height INTEGER NOT NULL,
@@ -472,7 +472,7 @@ CREATE TABLE IF NOT EXISTS signer_states (
 
 static CREATE_BURN_STATE_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS burn_blocks (
-    block_hash TEXT PRIMARY KEY,
+    block_hash BLOB PRIMARY KEY,
     block_height INTEGER NOT NULL,
     received_time INTEGER NOT NULL
 ) STRICT";
@@ -507,7 +507,7 @@ CREATE TABLE IF NOT EXISTS block_signatures (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- signature itself
     signature TEXT NOT NULL,
     PRIMARY KEY (signature)
@@ -519,7 +519,7 @@ CREATE TABLE IF NOT EXISTS block_rejection_signer_addrs (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- the signer address that rejected the block
     signer_addr TEXT NOT NULL,
     PRIMARY KEY (signer_addr)
@@ -532,10 +532,10 @@ CREATE TABLE IF NOT EXISTS temp_blocks (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL PRIMARY KEY,
+    signer_signature_hash BLOB NOT NULL PRIMARY KEY,
     reward_cycle INTEGER NOT NULL,
     block_info TEXT NOT NULL,
-    consensus_hash TEXT NOT NULL,
+    consensus_hash BLOB NOT NULL,
     signed_over INTEGER NOT NULL,
     broadcasted INTEGER,
     stacks_height INTEGER NOT NULL,
@@ -592,10 +592,10 @@ ALTER TABLE temp_blocks RENAME TO blocks;"#;
 // with the correct primary key
 static MIGRATE_BURN_STATE_TABLE_1_TO_TABLE_2: &str = r#"
 CREATE TABLE IF NOT EXISTS temp_burn_blocks (
-    block_hash TEXT NOT NULL,
+    block_hash BLOB NOT NULL,
     block_height INTEGER NOT NULL,
     received_time INTEGER NOT NULL,
-    consensus_hash TEXT PRIMARY KEY NOT NULL
+    consensus_hash BLOB PRIMARY KEY NOT NULL
 ) STRICT;
 
 INSERT INTO temp_burn_blocks (block_hash, block_height, received_time, consensus_hash)
@@ -624,7 +624,7 @@ CREATE INDEX IF NOT EXISTS idx_burn_blocks_block_hash ON burn_blocks(block_hash)
 
 static CREATE_BLOCK_VALIDATION_PENDING_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS block_validations_pending (
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- the time at which the block was added to the pending table
     added_time INTEGER NOT NULL,
     PRIMARY KEY (signer_signature_hash)
@@ -632,7 +632,7 @@ CREATE TABLE IF NOT EXISTS block_validations_pending (
 
 static CREATE_TENURE_ACTIVTY_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS tenure_activity (
-    consensus_hash TEXT NOT NULL PRIMARY KEY,
+    consensus_hash BLOB NOT NULL PRIMARY KEY,
     last_activity_time INTEGER NOT NULL
 ) STRICT;"#;
 
@@ -643,7 +643,7 @@ ALTER TABLE block_rejection_signer_addrs
 
 static ADD_CONSENSUS_HASH: &str = r#"
 ALTER TABLE burn_blocks
-    ADD COLUMN consensus_hash TEXT;
+    ADD COLUMN consensus_hash BLOB;
 "#;
 
 static ADD_CONSENSUS_HASH_INDEX: &str = r#"
@@ -662,7 +662,7 @@ CREATE TABLE IF NOT EXISTS signer_state_machine_updates (
 static CREATE_BURN_BLOCK_UPDATES_RECEIVED_TIME_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS burn_block_updates_received_times (
     signer_addr TEXT NOT NULL,
-    burn_block_consensus_hash TEXT NOT NULL,
+    burn_block_consensus_hash BLOB NOT NULL,
     received_time INTEGER NOT NULL,
     PRIMARY KEY (signer_addr, burn_block_consensus_hash)
 ) STRICT;
@@ -670,7 +670,7 @@ CREATE TABLE IF NOT EXISTS burn_block_updates_received_times (
 
 static ADD_PARENT_BURN_BLOCK_HASH: &str = r#"
  ALTER TABLE burn_blocks
-    ADD COLUMN parent_burn_block_hash TEXT;
+    ADD COLUMN parent_burn_block_hash BLOB;
 "#;
 
 static ADD_PARENT_BURN_BLOCK_HASH_INDEX: &str = r#"
@@ -679,7 +679,7 @@ CREATE INDEX IF NOT EXISTS burn_blocks_parent_burn_block_hash_idx on burn_blocks
 
 static ADD_BLOCK_VALIDATED_BY_REPLAY_TXS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS block_validated_by_replay_txs (
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     replay_tx_hash TEXT NOT NULL,
     replay_tx_exhausted INTEGER NOT NULL,
     PRIMARY KEY (signer_signature_hash, replay_tx_hash)
@@ -713,7 +713,7 @@ CREATE TABLE IF NOT EXISTS block_signatures (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- the signer address that signed the block
     signer_addr TEXT NOT NULL,
     -- signature itself
@@ -731,7 +731,7 @@ CREATE TABLE IF NOT EXISTS block_rejection_signer_addrs (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- the signer address that rejected the block
     signer_addr TEXT NOT NULL,
     -- the reject reason code
@@ -745,7 +745,7 @@ CREATE TABLE IF NOT EXISTS block_pre_commits (
     -- as well as the tenure itself so there's no need to include the reward cycle.  Just
     -- the sighash is sufficient to uniquely identify the block across all burnchain, PoX,
     -- and stacks forks.
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     -- signer address committing to sign the block
     signer_addr TEXT NOT NULL,
     PRIMARY KEY (signer_signature_hash, signer_addr)
@@ -759,7 +759,7 @@ ALTER TABLE blocks
 // New tables for tracking per-signer untracked block proposal responses with auto-eviction
 static CREATE_SIGNER_PENDING_PRE_COMMIT_RESPONSES: &str = r#"
 CREATE TABLE IF NOT EXISTS signer_pending_pre_commit_responses (
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     signer_addr TEXT NOT NULL,
     received_time INTEGER NOT NULL,
     PRIMARY KEY (signer_signature_hash, signer_addr)
@@ -774,7 +774,7 @@ ON signer_pending_pre_commit_responses (signer_signature_hash, received_time DES
 
 static CREATE_SIGNER_PENDING_SIGNATURE_RESPONSES: &str = r#"
 CREATE TABLE IF NOT EXISTS signer_pending_signature_responses (
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     signer_addr TEXT NOT NULL,
     signature TEXT NOT NULL,
     received_time INTEGER NOT NULL,
@@ -790,7 +790,7 @@ ON signer_pending_signature_responses (signer_signature_hash, received_time DESC
 
 static CREATE_SIGNER_PENDING_REJECTION_RESPONSES: &str = r#"
 CREATE TABLE IF NOT EXISTS signer_pending_rejection_responses (
-    signer_signature_hash TEXT NOT NULL,
+    signer_signature_hash BLOB NOT NULL,
     signer_addr TEXT NOT NULL,
     reject_code INTEGER NOT NULL,
     received_time INTEGER NOT NULL,
@@ -1440,7 +1440,7 @@ impl SignerDb {
         let result: Option<String> = query_row(
             &self.db,
             "SELECT block_info FROM blocks WHERE signer_signature_hash = ?",
-            params![hash.to_string()],
+            params![hash],
         )?;
 
         try_deserialize(result)
@@ -1652,11 +1652,11 @@ impl SignerDb {
             params![
                 u64_to_sql(block_info.reward_cycle)?,
                 u64_to_sql(block_info.burn_block_height)?,
-                hash.to_string(),
+                hash,
                 block_json,
                 &broadcasted,
                 u64_to_sql(block_info.block.header.chain_length)?,
-                block_info.block.header.consensus_hash.to_hex(),
+                block_info.block.header.consensus_hash,
                 &block_info.valid,
                 &block_info.state.to_string(),
                 &block_info.signed_group,
@@ -1878,11 +1878,10 @@ impl SignerDb {
         let qry = "DELETE FROM block_validations_pending WHERE signer_signature_hash = (SELECT signer_signature_hash FROM block_validations_pending ORDER BY added_time ASC LIMIT 1) RETURNING signer_signature_hash, added_time";
         let args = params![];
         let mut stmt = self.db.prepare(qry)?;
-        let result: Option<(String, i64)> = stmt
+        let result: Option<(Sha512Trunc256Sum, i64)> = stmt
             .query_row(args, |row| Ok((row.get(0)?, row.get(1)?)))
             .optional()?;
-        Ok(result.and_then(|(sighash, ts_i64)| {
-            let signer_sighash = Sha512Trunc256Sum::from_hex(&sighash).ok()?;
+        Ok(result.and_then(|(signer_sighash, ts_i64)| {
             let ts = u64::try_from(ts_i64).ok()?;
             Some((signer_sighash, ts))
         }))
@@ -1895,7 +1894,7 @@ impl SignerDb {
     ) -> Result<(), DBError> {
         self.db.execute(
             "DELETE FROM block_validations_pending WHERE signer_signature_hash = ?1",
-            params![sighash.to_string()],
+            params![sighash],
         )?;
         Ok(())
     }
@@ -1908,7 +1907,7 @@ impl SignerDb {
     ) -> Result<(), DBError> {
         self.db.execute(
             "INSERT INTO block_validations_pending (signer_signature_hash, added_time) VALUES (?1, ?2)",
-            params![sighash.to_string(), u64_to_sql(ts)?],
+            params![sighash, u64_to_sql(ts)?],
         )?;
         Ok(())
     }
@@ -1918,10 +1917,10 @@ impl SignerDb {
         &self,
         sighash: &Sha512Trunc256Sum,
     ) -> Result<bool, DBError> {
-        let qry = "SELECT signer_signature_hash FROM block_validations_pending WHERE signer_signature_hash = ?1";
-        let args = params![sighash.to_string()];
-        let sighash_opt: Option<String> = query_row(&self.db, qry, args)?;
-        Ok(sighash_opt.is_some())
+        let qry = "SELECT 1 FROM block_validations_pending WHERE signer_signature_hash = ?1";
+        let args = params![sighash];
+        let exists: Option<i64> = query_row(&self.db, qry, args)?;
+        Ok(exists.is_some())
     }
 
     /// Returns:
@@ -2177,7 +2176,7 @@ impl SignerDb {
         self.db.execute(
             "INSERT INTO block_validated_by_replay_txs (signer_signature_hash, replay_tx_hash, replay_tx_exhausted) VALUES (?1, ?2, ?3)",
             params![
-                signer_signature_hash.to_string(),
+                signer_signature_hash,
                 format!("{replay_tx_hash}"),
                 replay_tx_exhausted
             ],
@@ -2192,10 +2191,7 @@ impl SignerDb {
         replay_tx_hash: u64,
     ) -> Result<Option<BlockValidatedByReplaySet>, DBError> {
         let query = "SELECT replay_tx_hash, replay_tx_exhausted FROM block_validated_by_replay_txs WHERE signer_signature_hash = ? AND replay_tx_hash = ?";
-        let args = params![
-            signer_signature_hash.to_string(),
-            format!("{replay_tx_hash}")
-        ];
+        let args = params![signer_signature_hash, format!("{replay_tx_hash}")];
         query_row(&self.db, query, args)
     }
 
@@ -2322,7 +2318,7 @@ impl SignerDb {
         let received_time = get_epoch_time_secs();
         let qry = "INSERT OR REPLACE INTO signer_pending_pre_commit_responses (signer_signature_hash, signer_addr, received_time) VALUES (?1, ?2, ?3);";
         let args = params![
-            block_sighash.to_string(),
+            block_sighash,
             signer_addr.to_string(),
             u64_to_sql(received_time)?
         ];
@@ -2347,7 +2343,7 @@ impl SignerDb {
         let received_time = get_epoch_time_secs();
         let qry = "INSERT OR REPLACE INTO signer_pending_signature_responses (signer_signature_hash, signer_addr, signature, received_time) VALUES (?1, ?2, ?3, ?4);";
         let args = params![
-            block_sighash.to_string(),
+            block_sighash,
             signer_addr.to_string(),
             serde_json::to_string(signature).map_err(DBError::SerializationError)?,
             u64_to_sql(received_time)?
@@ -2374,7 +2370,7 @@ impl SignerDb {
         let reject_code = reject_reason as i64;
         let qry = "INSERT OR REPLACE INTO signer_pending_rejection_responses (signer_signature_hash, signer_addr, reject_code, received_time) VALUES (?1, ?2, ?3, ?4);";
         let args = params![
-            block_sighash.to_string(),
+            block_sighash,
             signer_addr.to_string(),
             reject_code,
             u64_to_sql(received_time)?
@@ -2396,12 +2392,10 @@ impl SignerDb {
         &self,
         block_sighash: &Sha512Trunc256Sum,
     ) -> Result<PendingBlockResponses, DBError> {
-        let hash_str = block_sighash.to_string();
-
         // Delete and return pre-commits in one operation
         let pre_commits_qry = "DELETE FROM signer_pending_pre_commit_responses WHERE signer_signature_hash = ?1 RETURNING signer_addr";
         let mut stmt = self.db.prepare(pre_commits_qry)?;
-        let pre_commits_rows = stmt.query_map(params![&hash_str], |row| {
+        let pre_commits_rows = stmt.query_map(params![block_sighash], |row| {
             let addr_str: String = row.get(0)?;
             let addr = StacksAddress::from_string(&addr_str).ok_or(
                 SqliteError::InvalidColumnType(0, addr_str.clone(), rusqlite::types::Type::Text),
@@ -2413,7 +2407,7 @@ impl SignerDb {
         // Delete and return signatures in one operation
         let signatures_qry = "DELETE FROM signer_pending_signature_responses WHERE signer_signature_hash = ?1 RETURNING signer_addr, signature";
         let mut stmt = self.db.prepare(signatures_qry)?;
-        let signatures_rows = stmt.query_map(params![&hash_str], |row| {
+        let signatures_rows = stmt.query_map(params![block_sighash], |row| {
             let addr_str: String = row.get(0)?;
             let sig_str: String = row.get(1)?;
             let addr = StacksAddress::from_string(&addr_str).ok_or(
@@ -2429,7 +2423,7 @@ impl SignerDb {
         // Delete and return rejections in one operation
         let rejections_qry = "DELETE FROM signer_pending_rejection_responses WHERE signer_signature_hash = ?1 RETURNING signer_addr, reject_code";
         let mut stmt = self.db.prepare(rejections_qry)?;
-        let rejections_rows = stmt.query_map(params![&hash_str], |row| {
+        let rejections_rows = stmt.query_map(params![block_sighash], |row| {
             let addr_str: String = row.get(0)?;
             let reject_code: u8 = row.get(1)?;
             let addr = StacksAddress::from_string(&addr_str).ok_or(
@@ -2571,7 +2565,7 @@ pub mod tests {
         block_sighash: &Sha512Trunc256Sum,
     ) -> Result<Vec<StacksAddress>, DBError> {
         let qry = "SELECT signer_addr FROM signer_pending_pre_commit_responses WHERE signer_signature_hash = ?1 ORDER BY received_time DESC";
-        let args = params![block_sighash.to_string()];
+        let args = params![block_sighash];
 
         let mut stmt = db.db.prepare(qry)?;
         let rows = stmt.query_map(args, |row| {
@@ -2590,7 +2584,7 @@ pub mod tests {
         block_sighash: &Sha512Trunc256Sum,
     ) -> Result<Vec<MessageSignature>, DBError> {
         let qry = "SELECT signature FROM signer_pending_signature_responses WHERE signer_signature_hash = ?1 ORDER BY received_time DESC";
-        let args = params![block_sighash.to_string()];
+        let args = params![block_sighash];
 
         let mut stmt = db.db.prepare(qry)?;
         let rows = stmt.query_map(args, |row| {
@@ -2609,7 +2603,7 @@ pub mod tests {
         block_sighash: &Sha512Trunc256Sum,
     ) -> Result<Vec<(StacksAddress, RejectReasonPrefix)>, DBError> {
         let qry = "SELECT signer_addr, reject_code FROM signer_pending_rejection_responses WHERE signer_signature_hash = ?1 ORDER BY received_time DESC";
-        let args = params![block_sighash.to_string()];
+        let args = params![block_sighash];
 
         let mut stmt = db.db.prepare(qry)?;
         let rows = stmt.query_map(args, |row| {
@@ -3938,7 +3932,7 @@ pub mod tests {
             "Expected exactly one row after migration"
         );
 
-        let (block_height, hex_hash): (u64, String) = conn
+        let (block_height, stored_hash): (u64, ConsensusHash) = conn
             .query_row(
                 "SELECT block_height, consensus_hash FROM burn_blocks;",
                 [],
@@ -3952,8 +3946,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            hex_hash,
-            consensus_hash.to_hex(),
+            stored_hash, consensus_hash,
             "Expected the surviving row to have the correct consensus_hash"
         );
     }
