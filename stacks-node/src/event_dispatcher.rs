@@ -1085,21 +1085,37 @@ impl EventDispatcher {
                 "Event dispatcher: processing pending payload: {}",
                 request_data.url
             );
-            let full_url = Url::parse(request_data.url.as_str()).unwrap_or_else(|_| {
-                panic!(
-                    "Event dispatcher: unable to parse {} as a URL",
-                    request_data.url
-                )
-            });
+            let full_url = match Url::parse(request_data.url.as_str()) {
+                Ok(url) => url,
+                Err(e) => {
+                    error!(
+                        "Event dispatcher: unable to parse pending URL, skipping";
+                        "url" => &request_data.url,
+                        "error" => %e
+                    );
+                    if let Err(e) = conn.delete_payload(id) {
+                        error!(
+                            "Event observer: failed to delete invalid pending payload";
+                            "error" => ?e
+                        );
+                    }
+                    continue;
+                }
+            };
             // find the right observer
             let observer = self.registered_observers.iter().find(|observer| {
-                let endpoint_url = Url::parse(format!("http://{}", &observer.endpoint).as_str())
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Event dispatcher: unable to parse {} as a URL",
-                            observer.endpoint
-                        )
-                    });
+                let endpoint_url =
+                    match Url::parse(format!("http://{}", &observer.endpoint).as_str()) {
+                        Ok(url) => url,
+                        Err(e) => {
+                            warn!(
+                                "Event dispatcher: unable to parse observer endpoint";
+                                "endpoint" => &observer.endpoint,
+                                "error" => %e
+                            );
+                            return false;
+                        }
+                    };
                 full_url.origin() == endpoint_url.origin()
             });
 
