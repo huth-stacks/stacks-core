@@ -2077,6 +2077,34 @@ impl RelayerThread {
         }
     }
 
+    /// Check available disk space on the working directory partition.
+    /// Logs warnings at low thresholds and initiates shutdown if critically low.
+    fn check_disk_space(&self) {
+        let working_dir = &self.config.node.working_dir;
+        let output = match std::process::Command::new("df")
+            .args(["-B1", "--output=avail", working_dir.as_str()])
+            .output()
+        {
+            Ok(o) => o,
+            Err(_) => return, // df not available (non-Linux), skip silently
+        };
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let avail_bytes: u64 = match stdout.lines().nth(1).and_then(|l| l.trim().parse().ok()) {
+            Some(b) => b,
+            None => return,
+        };
+
+        let gb = avail_bytes / (1024 * 1024 * 1024);
+        if avail_bytes < 1_000_000_000 {
+            error!("Disk space critically low, initiating shutdown"; "available_gb" => gb, "path" => working_dir.as_str());
+            self.globals.signal_stop();
+        } else if avail_bytes < 5_000_000_000 {
+            error!("Disk space critical"; "available_gb" => gb, "path" => working_dir.as_str());
+        } else if avail_bytes < 20_000_000_000 {
+            warn!("Disk space low"; "available_gb" => gb, "path" => working_dir.as_str());
+        }
+    }
+
     /// Main loop of the relayer.
     /// Runs in a separate thread.
     /// Continuously receives from `relay_rcv`.
@@ -2089,8 +2117,15 @@ impl RelayerThread {
 
         // how often we perform a loop pass below
         let poll_frequency_ms = 1_000;
+        let mut disk_check_counter: u64 = 0;
+        let disk_check_interval: u64 = 60; // check every 60 seconds
 
         while self.globals.keep_running() {
+            // Periodic disk space check
+            disk_check_counter += 1;
+            if disk_check_counter % disk_check_interval == 0 {
+                self.check_disk_space();
+            }
             self.check_tenure_timers();
             let raised_initiative = self.globals.take_initiative();
             let timed_out = Instant::now() >= self.next_initiative;
