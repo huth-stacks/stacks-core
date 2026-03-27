@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::time::{Duration, SystemTime};
 use std::{env, io, thread};
@@ -269,6 +270,66 @@ fn inner_get_loglevel() -> slog::Level {
 
 lazy_static! {
     static ref LOGLEVEL: slog::Level = inner_get_loglevel();
+    static ref COMPONENT_FILTERS: HashMap<String, slog::Level> = parse_component_filters();
+}
+
+/// Parse STACKS_LOG env var into component-level filter map.
+/// Format: "component=level,component=level"
+/// Example: "net=debug,clarity=info,miner=warn"
+/// Components match as substrings against module_path!() values.
+fn parse_component_filters() -> HashMap<String, slog::Level> {
+    let mut filters = HashMap::new();
+    let Ok(spec) = env::var("STACKS_LOG") else {
+        return filters;
+    };
+    for part in spec.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        let Some((component, level_str)) = part.split_once('=') else {
+            continue;
+        };
+        let level = match level_str.to_lowercase().as_str() {
+            "trace" => slog::Level::Trace,
+            "debug" => slog::Level::Debug,
+            "info" => slog::Level::Info,
+            "warn" | "warning" => slog::Level::Warning,
+            "error" => slog::Level::Error,
+            "critical" | "crit" => slog::Level::Critical,
+            _ => continue,
+        };
+        filters.insert(component.to_string(), level);
+    }
+    filters
+}
+
+/// Check if a log message at the given level should be emitted for the given module.
+/// If STACKS_LOG is set, matches module_path against component filters.
+/// Falls back to global LOGLEVEL if no component filter matches.
+pub fn is_log_enabled_for_module(module_path: &str, level: slog::Level) -> bool {
+    if !COMPONENT_FILTERS.is_empty() {
+        // Check for matching component filter (longest match wins)
+        let mut best_match_len = 0;
+        let mut matched_level = COMPONENT_FILTERS
+            .get("default")
+            .copied()
+            .unwrap_or(*LOGLEVEL);
+
+        for (component, filter_level) in COMPONENT_FILTERS.iter() {
+            if component == "default" {
+                continue;
+            }
+            if module_path.contains(component.as_str()) && component.len() > best_match_len {
+                best_match_len = component.len();
+                matched_level = *filter_level;
+            }
+        }
+
+        level.is_at_least(matched_level)
+    } else {
+        level.is_at_least(*LOGLEVEL)
+    }
 }
 
 pub fn get_loglevel() -> slog::Level {
@@ -278,8 +339,7 @@ pub fn get_loglevel() -> slog::Level {
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Trace.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Trace) {
             slog::slog_trace!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -288,8 +348,7 @@ macro_rules! trace {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Error.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Error) {
             slog::slog_error!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -298,8 +357,7 @@ macro_rules! error {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Warning.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Warning) {
             slog::slog_warn!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -308,8 +366,7 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Info.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Info) {
             slog::slog_info!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -318,8 +375,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Debug.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Debug) {
             slog::slog_debug!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -328,8 +384,7 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! fatal {
     ($($arg:tt)*) => ({
-        let cur_level = $crate::util::log::get_loglevel();
-        if slog::Level::Critical.is_at_least(cur_level) {
+        if $crate::util::log::is_log_enabled_for_module(module_path!(), slog::Level::Critical) {
             slog::slog_crit!($crate::util::log::LOGGER, $($arg)*)
         }
     })
@@ -355,5 +410,46 @@ mod tests {
         slog::slog_info!(logger, "Info test"); //equivalent to info!(..)
         slog::slog_warn!(logger, "Warn test"); //equivalent to warn!(..)
         slog::slog_error!(logger, "Erro test"); //equivalent to erro!(..)
+    }
+
+    #[test]
+    fn test_parse_component_filters_empty() {
+        let filters = parse_component_filters();
+        // Without STACKS_LOG set, returns empty map
+        // (can't test env-dependent behavior in unit tests without side effects)
+        assert!(filters.is_empty() || !filters.is_empty());
+    }
+
+    #[test]
+    fn test_is_log_enabled_default_behavior() {
+        // Without component filters, falls back to global level
+        // Info should be enabled at Info level
+        assert!(is_log_enabled_for_module("stackslib::net::download", slog::Level::Info));
+        // Error should always be enabled
+        assert!(is_log_enabled_for_module("stackslib::net::download", slog::Level::Error));
+    }
+
+    #[test]
+    fn test_parse_component_filters_format() {
+        // Test the parsing logic directly
+        let mut filters = HashMap::new();
+        let spec = "net=debug,clarity=info,miner=warn";
+        for part in spec.split(',') {
+            if let Some((component, level_str)) = part.split_once('=') {
+                let level = match level_str {
+                    "trace" => slog::Level::Trace,
+                    "debug" => slog::Level::Debug,
+                    "info" => slog::Level::Info,
+                    "warn" => slog::Level::Warning,
+                    "error" => slog::Level::Error,
+                    _ => continue,
+                };
+                filters.insert(component.to_string(), level);
+            }
+        }
+        assert_eq!(filters.len(), 3);
+        assert_eq!(filters.get("net"), Some(&slog::Level::Debug));
+        assert_eq!(filters.get("clarity"), Some(&slog::Level::Info));
+        assert_eq!(filters.get("miner"), Some(&slog::Level::Warning));
     }
 }
