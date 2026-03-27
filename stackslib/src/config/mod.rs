@@ -2585,7 +2585,19 @@ impl NodeConfig {
     }
 
     pub fn add_deny_node(&mut self, deny_node: &str, chain_id: u32, peer_version: u32) {
-        let sockaddr = deny_node.to_socket_addrs().unwrap().next().unwrap();
+        let sockaddr = match deny_node.to_socket_addrs() {
+            Ok(mut addrs) => match addrs.next() {
+                Some(addr) => addr,
+                None => {
+                    error!("No addresses found for deny node '{deny_node}', skipping");
+                    return;
+                }
+            },
+            Err(e) => {
+                error!("Failed to resolve deny node '{deny_node}': {e}, skipping");
+                return;
+            }
+        };
         let neighbor = NodeConfig::default_neighbor(
             sockaddr,
             Secp256k1PublicKey::from_private(&Secp256k1PrivateKey::random()),
