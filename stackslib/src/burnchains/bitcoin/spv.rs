@@ -60,8 +60,8 @@ const SPV_INITIAL_SCHEMA: &[&str] = &[
     r#"
     CREATE TABLE headers(
         version INTEGER NOT NULL,
-        prev_blockhash TEXT NOT NULL,
-        merkle_root TEXT NOT NULL,
+        prev_blockhash BLOB NOT NULL,
+        merkle_root BLOB NOT NULL,
         time INTEGER NOT NULL,
         bits INTEGER NOT NULL,
         nonce INTEGER NOT NULL,
@@ -93,13 +93,13 @@ const SPV_SCHEMA_3: &[&str] = &[
     r#"
     CREATE TABLE headers(
         version INTEGER NOT NULL,
-        prev_blockhash TEXT NOT NULL,
-        merkle_root TEXT NOT NULL,
+        prev_blockhash BLOB NOT NULL,
+        merkle_root BLOB NOT NULL,
         time INTEGER NOT NULL,
         bits INTEGER NOT NULL,
         nonce INTEGER NOT NULL,
         height INTEGER PRIMARY KEY NOT NULL,    -- not part of BlockHeader, but used by us internally
-        hash TEXT NOT NULL                      -- not part of BlockHeader, but derived from the data that is
+        hash BLOB NOT NULL                     -- not part of BlockHeader, but derived from the data that is
     );
     "#,
     r#"
@@ -277,9 +277,11 @@ impl SpvClient {
     }
 
     fn db_migrate(conn: &mut DBConn) -> Result<(), btc_error> {
-        let version = SpvClient::db_get_version(conn)?;
-        while version != SPV_DB_VERSION {
+        loop {
             let version = SpvClient::db_get_version(conn)?;
+            if version == SPV_DB_VERSION {
+                break;
+            }
             match version.as_str() {
                 "1" => {
                     debug!("Migrate SPV DB from schema 1 to 2");

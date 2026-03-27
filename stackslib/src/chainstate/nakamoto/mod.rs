@@ -93,8 +93,7 @@ use crate::net::stackerdb::{StackerDBConfig, MINER_SLOT_COUNT};
 use crate::net::Error as net_error;
 use crate::util_lib::boot::{boot_code_addr, boot_code_id, boot_code_tx_auth};
 use crate::util_lib::db::{
-    query_row, query_row_columns, query_row_panic, query_rows, u64_to_sql, Error as DBError,
-    FromRow,
+    query_row_columns, query_row_panic, query_rows, u64_to_sql, Error as DBError, FromRow,
 };
 
 pub mod coordinator;
@@ -139,7 +138,7 @@ lazy_static! {
     -- Table for storing calculated reward sets. This must be in the Chainstate DB because calculation occurs
     --   during block processing.
     CREATE TABLE nakamoto_reward_sets (
-                     index_block_hash TEXT NOT NULL,
+                     index_block_hash BLOB NOT NULL,
                      reward_set TEXT NOT NULL,
                      PRIMARY KEY (index_block_hash)
     );"#.into(),
@@ -150,10 +149,10 @@ lazy_static! {
           -- The following fields all correspond to entries in the StacksHeaderInfo struct
                      block_height INTEGER NOT NULL,
                      -- root hash of the internal, not-consensus-critical MARF that allows us to track chainstate/fork metadata
-                     index_root TEXT NOT NULL,
+                     index_root BLOB NOT NULL,
                      -- burn header hash corresponding to the consensus hash (NOT guaranteed to be unique, since we can
                      --    have 2+ blocks per burn block if there's a PoX fork)
-                     burn_header_hash TEXT NOT NULL,
+                     burn_header_hash BLOB NOT NULL,
                      -- height of the burnchain block header that generated this consensus hash
                      burn_header_height INT NOT NULL,
                      -- timestamp from burnchain block header that generated this consensus hash
@@ -168,13 +167,13 @@ lazy_static! {
                      -- this field is the total amount of BTC spent in the chain history (including this block)
                      burn_spent INTEGER NOT NULL,
                      -- the consensus hash of the burnchain block that selected this block's miner's block-commit
-                     consensus_hash TEXT NOT NULL,
+                     consensus_hash BLOB NOT NULL,
                      -- the parent StacksBlockId
-                     parent_block_id TEXT NOT NULL,
+                     parent_block_id BLOB NOT NULL,
                      -- Merkle root of a Merkle tree constructed out of all the block's transactions
-                     tx_merkle_root TEXT NOT NULL,
+                     tx_merkle_root BLOB NOT NULL,
                      -- root hash of the Stacks chainstate MARF
-                     state_index_root TEXT NOT NULL,
+                     state_index_root BLOB NOT NULL,
                      -- miner's signature over the block
                      miner_signature TEXT NOT NULL,
                      -- signers' signatures over the block
@@ -186,11 +185,11 @@ lazy_static! {
                      -- what kind of header this is (nakamoto or stacks 2.x)
                      header_type TEXT NOT NULL,
                      -- hash of the block
-                     block_hash TEXT NOT NULL,
+                     block_hash BLOB NOT NULL,
                      -- index_block_hash is the hash of the block hash and consensus hash of the burn block that selected it,
                      -- and is guaranteed to be globally unique (across all Stacks forks and across all PoX forks).
                      -- index_block_hash is the block hash fed into the MARF index.
-                     index_block_hash TEXT NOT NULL,
+                     index_block_hash BLOB NOT NULL,
                      -- the ExecutionCost of the block
                      cost TEXT NOT NULL,
                      -- the total cost up to and including this block in the current tenure
@@ -200,7 +199,7 @@ lazy_static! {
                      -- this field tracks the total tx fees so far in this tenure. it is a text-serialized u128
                      tenure_tx_fees TEXT NOT NULL,
                      -- nakamoto block's VRF proof, if this is a tenure-start block
-                     vrf_proof TEXT,
+                     vrf_proof BLOB,
 
               PRIMARY KEY(consensus_hash,block_hash)
           );
@@ -231,7 +230,7 @@ pub static NAKAMOTO_CHAINSTATE_SCHEMA_2: &[&str] = &[
     // nakamoto blocks have not been produced yet.
     r#"
     ALTER TABLE nakamoto_block_headers
-    ADD COLUMN burn_view TEXT;
+    ADD COLUMN burn_view BLOB;
     "#,
 ];
 
@@ -3164,26 +3163,18 @@ impl NakamotoChainState {
         chainstate_conn: &Connection,
         tenure_start_block_id: &StacksBlockId,
     ) -> Result<Option<VRFProof>, ChainstateError> {
-        let sql = r#"SELECT IFNULL(vrf_proof,"") FROM nakamoto_block_headers WHERE index_block_hash = ?1"#;
-        let args = params![tenure_start_block_id];
-        let proof_bytes: Option<String> = query_row(chainstate_conn, sql, args)?;
-        if let Some(bytes) = proof_bytes {
-            if bytes.is_empty() {
-                // no VRF proof
-                return Ok(None);
-            }
-            let proof = VRFProof::from_hex(&bytes)
-                .ok_or(DBError::Corruption)
-                .inspect_err(|_e| {
-                    warn!("Failed to load VRF proof: could not decode";
-                          "vrf_proof" => %bytes,
-                          "tenure_start_block_id" => %tenure_start_block_id,
-                    );
-                })?;
-            Ok(Some(proof))
-        } else {
-            Ok(None)
-        }
+        chainstate_conn
+            .query_row(
+                "SELECT vrf_proof FROM nakamoto_block_headers WHERE index_block_hash = ?1",
+                params![tenure_start_block_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(ChainstateError::from)
+            .and_then(|proof_opt: Option<Option<VRFProof>>| match proof_opt {
+                Some(Some(proof)) => Ok(Some(proof)),
+                Some(None) | None => Ok(None),
+            })
     }
 
     /// Return the coinbase height of `block` if it was a nakamoto block, or the
@@ -3291,8 +3282,6 @@ impl NakamotoChainState {
 
         assert!(*stacks_block_height < u64::try_from(i64::MAX).unwrap());
 
-        let vrf_proof_bytes = vrf_proof.map(|proof| proof.to_hex());
-
         let signer_signature = serde_json::to_string(&header.signer_signature).map_err(|_| {
             ChainstateError::InvalidStacksBlock(format!(
                 "Failed to serialize signer signature for block {}",
@@ -3324,7 +3313,7 @@ impl NakamotoChainState {
             &tenure_tx_fees.to_string(),
             &header.parent_block_id,
             if tenure_changed { &1i64 } else { &0i64 },
-            &vrf_proof_bytes.as_ref(),
+            vrf_proof,
             &header.pox_treatment,
             &height_in_tenure,
             tip_info.burn_view.as_ref().ok_or_else(|| {

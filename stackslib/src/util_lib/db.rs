@@ -30,7 +30,6 @@ use stacks_common::types::chainstate::{SortitionId, StacksAddress, StacksBlockId
 use stacks_common::types::sqlite::NO_PARAMS;
 use stacks_common::types::Address;
 use stacks_common::util::db::update_lock_table;
-use stacks_common::util::hash::to_hex;
 use stacks_common::util::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 
 use crate::chainstate::stacks::index::marf::{MarfConnection, MarfTransaction, MARF};
@@ -319,12 +318,19 @@ macro_rules! impl_byte_array_from_column {
             fn column_result(
                 value: rusqlite::types::ValueRef,
             ) -> rusqlite::types::FromSqlResult<Self> {
-                let hex_str = value.as_str()?;
-                let byte_str = stacks_common::util::hash::hex_bytes(hex_str)
-                    .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
-                let inst = $thing::from_bytes(&byte_str)
-                    .ok_or(rusqlite::types::FromSqlError::InvalidType)?;
-                Ok(inst)
+                match value {
+                    rusqlite::types::ValueRef::Blob(byte_str) => $thing::from_bytes(byte_str)
+                        .ok_or(rusqlite::types::FromSqlError::InvalidType),
+                    rusqlite::types::ValueRef::Text(hex_str) => {
+                        let hex_str = std::str::from_utf8(hex_str)
+                            .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
+                        let byte_str = stacks_common::util::hash::hex_bytes(hex_str)
+                            .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
+                        $thing::from_bytes(&byte_str)
+                            .ok_or(rusqlite::types::FromSqlError::InvalidType)
+                    }
+                    _ => Err(rusqlite::types::FromSqlError::InvalidType),
+                }
             }
         }
 
@@ -339,8 +345,7 @@ macro_rules! impl_byte_array_from_column {
 
         impl rusqlite::types::ToSql for $thing {
             fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-                let hex_str = self.to_hex();
-                Ok(hex_str.into())
+                Ok(self.as_ref().to_vec().into())
             }
         }
     };
@@ -780,7 +785,7 @@ fn load_indexed(conn: &DBConn, marf_value: &MARFValue) -> Result<Option<String>,
         .prepare("SELECT value FROM __fork_storage WHERE value_hash = ?1 LIMIT 2")
         .map_err(Error::SqliteError)?;
     let mut rows = stmt
-        .query(params![marf_value.to_hex()])
+        .query(params![marf_value.as_bytes()])
         .map_err(Error::SqliteError)?;
     let mut value = None;
 
@@ -788,10 +793,7 @@ fn load_indexed(conn: &DBConn, marf_value: &MARFValue) -> Result<Option<String>,
         let value_str: String = row.get(0)?;
         if value.is_some() {
             // should be impossible
-            panic!(
-                "FATAL: two or more values for {}",
-                &to_hex(&marf_value.to_vec())
-            );
+            panic!("FATAL: two or more values for {}", &marf_value.to_hex());
         }
         value = Some(value_str);
     }
@@ -862,7 +864,7 @@ impl<'a, C: Clone, T: MarfTrieId> IndexDBTx<'a, C, T> {
         -- fork-specific key/value storage, indexed via a MARF.
         -- each row is guaranteed to be unique
         CREATE TABLE IF NOT EXISTS __fork_storage(
-            value_hash TEXT NOT NULL,
+            value_hash BLOB NOT NULL,
             value TEXT NOT NULL,
 
             PRIMARY KEY(value_hash)
@@ -906,7 +908,7 @@ impl<'a, C: Clone, T: MarfTrieId> IndexDBTx<'a, C, T> {
         let marf_value = MARFValue::from_value(value);
         self.tx().execute(
             "INSERT OR REPLACE INTO __fork_storage (value_hash, value) VALUES (?1, ?2)",
-            &[&to_hex(&marf_value.to_vec()), value],
+            params![marf_value.as_bytes(), value],
         )?;
         Ok(marf_value)
     }
@@ -989,6 +991,7 @@ mod tests {
     use std::fs;
 
     use super::*;
+    use crate::chainstate::stacks::index::MARFValue;
 
     #[test]
     fn test_pragma() {
@@ -1020,5 +1023,36 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn fork_storage_roundtrips_blob_hashes() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE __fork_storage (value_hash BLOB PRIMARY KEY, value TEXT NOT NULL)",
+            NO_PARAMS,
+        )
+        .unwrap();
+
+        let value = "hello-world".to_string();
+        let marf_value = MARFValue::from_value(&value);
+
+        conn.execute(
+            "INSERT INTO __fork_storage (value_hash, value) VALUES (?1, ?2)",
+            params![marf_value.as_bytes(), &value],
+        )
+        .unwrap();
+
+        let stored_type: String = conn
+            .query_row(
+                "SELECT typeof(value_hash) FROM __fork_storage",
+                NO_PARAMS,
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_type, "blob");
+
+        let loaded = load_indexed(&conn, &marf_value).unwrap();
+        assert_eq!(loaded, Some(value));
     }
 }

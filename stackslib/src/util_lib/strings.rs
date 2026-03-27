@@ -224,11 +224,6 @@ impl StacksString {
         }
         Some(StacksString(s.as_bytes().to_vec()))
     }
-
-    pub fn to_string(&self) -> String {
-        // guaranteed to always succeed because the string is ASCII
-        String::from_utf8(self.0.clone()).unwrap()
-    }
 }
 
 impl UrlString {

@@ -642,12 +642,11 @@ impl ClarityBackingStore for ReadOnlyMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|(marf_value, proof)| {
-                let side_key = marf_value.to_hex();
-                let data =
-                    SqliteConnection::get(self.get_side_store(), &side_key)?.ok_or_else(|| {
+                let data = SqliteConnection::get(self.get_side_store(), marf_value.as_bytes())?
+                    .ok_or_else(|| {
                         VmInternalError::Expect(format!(
                             "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
+                            marf_value.to_hex()
                         ))
                     })?;
                 Ok((data, proof.serialize_to_vec()))
@@ -667,12 +666,11 @@ impl ClarityBackingStore for ReadOnlyMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|(marf_value, proof)| {
-                let side_key = marf_value.to_hex();
-                let data =
-                    SqliteConnection::get(self.get_side_store(), &side_key)?.ok_or_else(|| {
+                let data = SqliteConnection::get(self.get_side_store(), marf_value.as_bytes())?
+                    .ok_or_else(|| {
                         VmInternalError::Expect(format!(
                             "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
+                            marf_value.to_hex()
                         ))
                     })?;
                 Ok((data, proof.serialize_to_vec()))
@@ -704,14 +702,15 @@ impl ClarityBackingStore for ReadOnlyMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|marf_value| {
-                let side_key = marf_value.to_hex();
-                SqliteConnection::get(self.get_side_store(), &side_key)?.ok_or_else(|| {
-                    VmInternalError::Expect(format!(
-                        "ERROR: MARF contained value_hash not found in side storage: {}",
-                        side_key
-                    ))
-                    .into()
-                })
+                SqliteConnection::get(self.get_side_store(), marf_value.as_bytes())?.ok_or_else(
+                    || {
+                        VmInternalError::Expect(format!(
+                            "ERROR: MARF contained value_hash not found in side storage: {}",
+                            marf_value.to_hex()
+                        ))
+                        .into()
+                    },
+                )
             })
             .transpose()
     }
@@ -733,15 +732,20 @@ impl ClarityBackingStore for ReadOnlyMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|marf_value| {
-                let side_key = marf_value.to_hex();
-                trace!("MarfedKV get side-key for {:?}: {:?}", hash, &side_key);
-                SqliteConnection::get(self.get_side_store(), &side_key)?.ok_or_else(|| {
-                    VmInternalError::Expect(format!(
-                        "ERROR: MARF contained value_hash not found in side storage: {}",
-                        side_key
-                    ))
-                    .into()
-                })
+                trace!(
+                    "MarfedKV get side-key for {:?}: {:?}",
+                    hash,
+                    marf_value.to_hex()
+                );
+                SqliteConnection::get(self.get_side_store(), marf_value.as_bytes())?.ok_or_else(
+                    || {
+                        VmInternalError::Expect(format!(
+                            "ERROR: MARF contained value_hash not found in side storage: {}",
+                            marf_value.to_hex()
+                        ))
+                        .into()
+                    },
+                )
             })
             .transpose()
     }
@@ -847,15 +851,20 @@ impl ClarityBackingStore for PersistentWritableMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|marf_value| {
-                let side_key = marf_value.to_hex();
-                trace!("MarfedKV get side-key for {:?}: {:?}", key, &side_key);
-                SqliteConnection::get(self.marf.sqlite_tx(), &side_key)?.ok_or_else(|| {
-                    VmInternalError::Expect(format!(
-                        "ERROR: MARF contained value_hash not found in side storage: {}",
-                        side_key
-                    ))
-                    .into()
-                })
+                trace!(
+                    "MarfedKV get side-key for {:?}: {:?}",
+                    key,
+                    marf_value.to_hex()
+                );
+                SqliteConnection::get(self.marf.sqlite_tx(), marf_value.as_bytes())?.ok_or_else(
+                    || {
+                        VmInternalError::Expect(format!(
+                            "ERROR: MARF contained value_hash not found in side storage: {}",
+                            marf_value.to_hex()
+                        ))
+                        .into()
+                    },
+                )
             })
             .transpose()
     }
@@ -877,15 +886,20 @@ impl ClarityBackingStore for PersistentWritableMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|marf_value| {
-                let side_key = marf_value.to_hex();
-                trace!("MarfedKV get side-key for {:?}: {:?}", hash, &side_key);
-                SqliteConnection::get(self.marf.sqlite_tx(), &side_key)?.ok_or_else(|| {
-                    VmInternalError::Expect(format!(
-                        "ERROR: MARF contained value_hash not found in side storage: {}",
-                        side_key
-                    ))
-                    .into()
-                })
+                trace!(
+                    "MarfedKV get side-key for {:?}: {:?}",
+                    hash,
+                    marf_value.to_hex()
+                );
+                SqliteConnection::get(self.marf.sqlite_tx(), marf_value.as_bytes())?.ok_or_else(
+                    || {
+                        VmInternalError::Expect(format!(
+                            "ERROR: MARF contained value_hash not found in side storage: {}",
+                            marf_value.to_hex()
+                        ))
+                        .into()
+                    },
+                )
             })
             .transpose()
     }
@@ -902,12 +916,11 @@ impl ClarityBackingStore for PersistentWritableMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|(marf_value, proof)| {
-                let side_key = marf_value.to_hex();
-                let data =
-                    SqliteConnection::get(self.marf.sqlite_tx(), &side_key)?.ok_or_else(|| {
+                let data = SqliteConnection::get(self.marf.sqlite_tx(), marf_value.as_bytes())?
+                    .ok_or_else(|| {
                         VmInternalError::Expect(format!(
                             "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
+                            marf_value.to_hex()
                         ))
                     })?;
                 Ok((data, proof.serialize_to_vec()))
@@ -927,12 +940,11 @@ impl ClarityBackingStore for PersistentWritableMarfStore<'_> {
             })
             .map_err(|_| VmInternalError::Expect("ERROR: Unexpected MARF Failure on GET".into()))?
             .map(|(marf_value, proof)| {
-                let side_key = marf_value.to_hex();
-                let data =
-                    SqliteConnection::get(self.marf.sqlite_tx(), &side_key)?.ok_or_else(|| {
+                let data = SqliteConnection::get(self.marf.sqlite_tx(), marf_value.as_bytes())?
+                    .ok_or_else(|| {
                         VmInternalError::Expect(format!(
                             "ERROR: MARF contained value_hash not found in side storage: {}",
-                            side_key
+                            marf_value.to_hex()
                         ))
                     })?;
                 Ok((data, proof.serialize_to_vec()))
@@ -1008,7 +1020,7 @@ impl ClarityBackingStore for PersistentWritableMarfStore<'_> {
         let mut values = Vec::with_capacity(items.len());
         for (key, value) in items.into_iter() {
             let marf_value = MARFValue::from_value(&value);
-            SqliteConnection::put(self.marf.sqlite_tx(), &marf_value.to_hex(), &value)?;
+            SqliteConnection::put(self.marf.sqlite_tx(), marf_value.as_bytes(), &value)?;
             keys.push(key);
             values.push(marf_value);
         }

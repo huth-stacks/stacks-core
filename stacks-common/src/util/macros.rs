@@ -736,19 +736,25 @@ macro_rules! impl_byte_array_rusqlite_only {
             fn column_result(
                 value: rusqlite::types::ValueRef,
             ) -> rusqlite::types::FromSqlResult<Self> {
-                let hex_str = value.as_str()?;
-                let byte_str = $crate::util::hash::hex_bytes(hex_str)
-                    .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
-                let inst = $thing::from_bytes(&byte_str)
-                    .ok_or(rusqlite::types::FromSqlError::InvalidType)?;
-                Ok(inst)
+                match value {
+                    rusqlite::types::ValueRef::Blob(byte_str) => $thing::from_bytes(byte_str)
+                        .ok_or(rusqlite::types::FromSqlError::InvalidType),
+                    rusqlite::types::ValueRef::Text(hex_str) => {
+                        let hex_str = std::str::from_utf8(hex_str)
+                            .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
+                        let byte_str = $crate::util::hash::hex_bytes(hex_str)
+                            .map_err(|_e| rusqlite::types::FromSqlError::InvalidType)?;
+                        $thing::from_bytes(&byte_str)
+                            .ok_or(rusqlite::types::FromSqlError::InvalidType)
+                    }
+                    _ => Err(rusqlite::types::FromSqlError::InvalidType),
+                }
             }
         }
 
         impl rusqlite::types::ToSql for $thing {
             fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-                let hex_str = self.to_hex();
-                Ok(hex_str.into())
+                Ok(self.to_bytes().to_vec().into())
             }
         }
     };

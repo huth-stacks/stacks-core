@@ -89,7 +89,7 @@ impl BlockSelection {
         match self {
             BlockSelection::All => "WHERE orphaned = 0 ORDER BY height ASC".into(),
             BlockSelection::Prefix(prefix) => format!(
-                "WHERE orphaned = 0 AND index_block_hash LIKE '{prefix}%' ORDER BY height ASC",
+                "WHERE orphaned = 0 AND hex(index_block_hash) LIKE '{prefix}%' ORDER BY height ASC",
             ),
             BlockSelection::Last(count) => {
                 format!("WHERE orphaned = 0 ORDER BY height DESC LIMIT {count}")

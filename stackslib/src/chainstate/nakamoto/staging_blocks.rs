@@ -60,12 +60,12 @@ pub const NAKAMOTO_STAGING_DB_SCHEMA_1: &[&str] = &[
   -- Table for staging nakamoto blocks
   CREATE TABLE nakamoto_staging_blocks (
                  -- SHA512/256 hash of this block
-                 block_hash TEXT NOT NULL,
+                 block_hash BLOB NOT NULL,
                  -- The consensus hash of the burnchain block that selected this block's miner's block-commit.
                  -- This identifies the tenure to which this block belongs.
-                 consensus_hash TEXT NOT NULL,
+                 consensus_hash BLOB NOT NULL,
                  -- the parent index_block_hash
-                 parent_block_id TEXT NOT NULL,
+                 parent_block_id BLOB NOT NULL,
                  -- whether or not this is the first block in its tenure
                  is_tenure_start BOOL NOT NULL,
 
@@ -80,7 +80,7 @@ pub const NAKAMOTO_STAGING_DB_SCHEMA_1: &[&str] = &[
                  height INT NOT NULL,
 
                  -- used internally -- this is the StacksBlockId of this block's consensus hash and block hash
-                 index_block_hash TEXT NOT NULL,
+                 index_block_hash BLOB NOT NULL,
                  -- how long the block was in-flight
                  download_time INT NOT NULL,
                  -- when this block was stored
@@ -106,12 +106,12 @@ pub const NAKAMOTO_STAGING_DB_SCHEMA_2: &[&str] = &[
   -- Table for staging nakamoto blocks
   CREATE TABLE nakamoto_staging_blocks (
                  -- SHA512/256 hash of this block (derived value from `data`)
-                 block_hash TEXT NOT NULL,
+                 block_hash BLOB NOT NULL,
                  -- The consensus hash of the burnchain block that selected this block's miner's block-commit.
                  -- This identifies the tenure to which this block belongs.
-                 consensus_hash TEXT NOT NULL,
+                 consensus_hash BLOB NOT NULL,
                  -- the parent index_block_hash
-                 parent_block_id TEXT NOT NULL,
+                 parent_block_id BLOB NOT NULL,
                  -- whether or not this is the first block in its tenure
                  is_tenure_start BOOL NOT NULL,
 
@@ -127,7 +127,7 @@ pub const NAKAMOTO_STAGING_DB_SCHEMA_2: &[&str] = &[
 
                  -- used internally -- this is the StacksBlockId of this block's consensus hash and block hash
                  -- (derived value from `data`)
-                 index_block_hash TEXT UNIQUE NOT NULL,
+                 index_block_hash BLOB UNIQUE NOT NULL,
                  -- when this block was processed
                  processed_time INT NOT NULL,
                  -- how the block was obtained -- was it pushed? downloaded? uploaded? etc.

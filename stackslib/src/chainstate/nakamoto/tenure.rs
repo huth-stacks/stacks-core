@@ -85,18 +85,18 @@ pub static NAKAMOTO_TENURES_SCHEMA_1: &str = r#"
     CREATE TABLE nakamoto_tenures (
         -- consensus hash of start-tenure block (i.e. the consensus hash of the sortition in which the miner's block-commit
         -- was mined)
-        tenure_id_consensus_hash TEXT NOT NULL,
+        tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the previous tenure's start-tenure block
-        prev_tenure_id_consensus_hash TEXT NOT NULL,
+        prev_tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the last-processed sortition
-        burn_view_consensus_hash TEXT NOT NULL,
+        burn_view_consensus_hash BLOB NOT NULL,
         -- whether or not this tenure was triggered by a sortition (as opposed to a tenure-extension).
         -- this is equal to the `cause` field in a TenureChange
         cause INTEGER NOT NULL,
         -- block hash of start-tenure block
-        block_hash TEXT NOT NULL,
+        block_hash BLOB NOT NULL,
         -- block ID of this start block (this is the StacksBlockId of the above tenure_id_consensus_hash and block_hash)
-        block_id TEXT NOT NULL,
+        block_id BLOB NOT NULL,
         -- this field is the total number of _sortition-induced_ tenures in the chain history (including this tenure),
         -- as of the _end_ of this block.  A tenure can contain multiple TenureChanges; if so, then this
         -- is the height of the _sortition-induced_ TenureChange that created it.
@@ -125,18 +125,18 @@ pub static NAKAMOTO_TENURES_SCHEMA_2: &str = r#"
     CREATE TABLE nakamoto_tenures (
         -- consensus hash of start-tenure block (i.e. the consensus hash of the sortition in which the miner's block-commit
         -- was mined)
-        tenure_id_consensus_hash TEXT NOT NULL,
+        tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the previous tenure's start-tenure block
-        prev_tenure_id_consensus_hash TEXT NOT NULL,
+        prev_tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the last-processed sortition
-        burn_view_consensus_hash TEXT NOT NULL,
+        burn_view_consensus_hash BLOB NOT NULL,
         -- whether or not this tenure was triggered by a sortition (as opposed to a tenure-extension).
         -- this is equal to the `cause` field in a TenureChange
         cause INTEGER NOT NULL,
         -- block hash of start-tenure block
-        block_hash TEXT NOT NULL,
+        block_hash BLOB NOT NULL,
         -- block ID of this start block (this is the StacksBlockId of the above tenure_id_consensus_hash and block_hash)
-        block_id TEXT NOT NULL,
+        block_id BLOB NOT NULL,
         -- this field is the total number of _sortition-induced_ tenures in the chain history (including this tenure),
         -- as of the _end_ of this block.  A tenure can contain multiple TenureChanges; if so, then this
         -- is the height of the _sortition-induced_ TenureChange that created it.
@@ -168,18 +168,18 @@ pub static NAKAMOTO_TENURES_SCHEMA_3: &str = r#"
     CREATE TABLE nakamoto_tenure_events (
         -- consensus hash of start-tenure block (i.e. the consensus hash of the sortition in which the miner's block-commit
         -- was mined)
-        tenure_id_consensus_hash TEXT NOT NULL,
+        tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the previous tenure's start-tenure block
-        prev_tenure_id_consensus_hash TEXT NOT NULL,
+        prev_tenure_id_consensus_hash BLOB NOT NULL,
         -- consensus hash of the last-processed sortition
-        burn_view_consensus_hash TEXT NOT NULL,
+        burn_view_consensus_hash BLOB NOT NULL,
         -- whether or not this tenure was triggered by a sortition (as opposed to a tenure-extension).
         -- this is equal to the `cause` field in a TenureChange
         cause INTEGER NOT NULL,
         -- block hash of start-tenure block
-        block_hash TEXT NOT NULL,
+        block_hash BLOB NOT NULL,
         -- block ID of this start block (this is the StacksBlockId of the above tenure_id_consensus_hash and block_hash)
-        block_id TEXT NOT NULL,
+        block_id BLOB NOT NULL,
         -- this field is the total number of _sortition-induced_ tenures in the chain history (including this tenure),
         -- as of the _end_ of this block.  A tenure can contain multiple TenureChanges; if so, then this
         -- is the height of the _sortition-induced_ TenureChange that created it.
@@ -208,6 +208,61 @@ pub struct NakamotoTenureEventId {
     pub burn_view_consensus_hash: ConsensusHash,
     /// start block ID of this tenure
     pub block_id: StacksBlockId,
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::{params, Connection};
+    use stacks_common::types::sqlite::NO_PARAMS;
+
+    use super::*;
+
+    #[test]
+    fn strict_tenure_events_accept_blob_hash_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(NAKAMOTO_TENURES_SCHEMA_3).unwrap();
+
+        let tenure_id_consensus_hash = ConsensusHash([1; 20]);
+        let prev_tenure_id_consensus_hash = ConsensusHash([2; 20]);
+        let burn_view_consensus_hash = ConsensusHash([3; 20]);
+        let block_hash = BlockHeaderHash([4; 32]);
+        let block_id = StacksBlockId::new(&tenure_id_consensus_hash, &block_hash);
+
+        conn.execute(
+            "INSERT INTO nakamoto_tenure_events
+                (tenure_id_consensus_hash, prev_tenure_id_consensus_hash, burn_view_consensus_hash, cause,
+                 block_hash, block_id, coinbase_height, num_blocks_confirmed)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                tenure_id_consensus_hash,
+                prev_tenure_id_consensus_hash,
+                burn_view_consensus_hash,
+                TenureChangeCause::BlockFound.as_u8(),
+                block_hash,
+                block_id,
+                1_u64,
+                0_u32,
+            ],
+        )
+        .unwrap();
+
+        let (stored_consensus_type, stored_block_type, stored_block_id_type): (
+            String,
+            String,
+            String,
+        ) = conn
+            .query_row(
+                "SELECT typeof(tenure_id_consensus_hash), typeof(block_hash), typeof(block_id)
+                 FROM nakamoto_tenure_events",
+                NO_PARAMS,
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(stored_consensus_type, "blob");
+        assert_eq!(stored_block_type, "blob");
+        assert_eq!(stored_block_id_type, "blob");
+    }
 }
 
 /// Nakamto tenure event.  Something happened to the tenure stream, and this struct encodes it (be

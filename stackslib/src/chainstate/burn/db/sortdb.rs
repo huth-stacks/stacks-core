@@ -496,19 +496,19 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     -- organizes the set of forks in the burn chain as well.
     CREATE TABLE snapshots(
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
-        sortition_id TEXT UNIQUE NOT NULL,
-        parent_sortition_id TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
+        sortition_id BLOB UNIQUE NOT NULL,
+        parent_sortition_id BLOB NOT NULL,
         burn_header_timestamp INT NOT NULL,
-        parent_burn_header_hash TEXT NOT NULL,
-        consensus_hash TEXT UNIQUE NOT NULL,
-        ops_hash TEXT NOT NULL,
+        parent_burn_header_hash BLOB NOT NULL,
+        consensus_hash BLOB UNIQUE NOT NULL,
+        ops_hash BLOB NOT NULL,
         total_burn TEXT NOT NULL,
         sortition INTEGER NOT NULL,
-        sortition_hash TEXT NOT NULL,
-        winning_block_txid TEXT NOT NULL,
-        winning_stacks_block_hash TEXT NOT NULL,
-        index_root TEXT UNIQUE NOT NULL,
+        sortition_hash BLOB NOT NULL,
+        winning_block_txid BLOB NOT NULL,
+        winning_stacks_block_hash BLOB NOT NULL,
+        index_root BLOB UNIQUE NOT NULL,
 
         num_sortitions INTEGER NOT NULL,
 
@@ -517,8 +517,8 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
         arrival_index INTEGER NOT NULL,                 -- (global) order in which this Stacks block was processed
 
         canonical_stacks_tip_height INTEGER NOT NULL,   -- height of highest known Stacks fork in this burn chain fork
-        canonical_stacks_tip_hash TEXT NOT NULL,        -- hash of highest known Stacks fork's tip block in this burn chain fork
-        canonical_stacks_tip_consensus_hash TEXT NOT NULL,   -- burn hash of highest known Stacks fork's tip block in this burn chain fork
+        canonical_stacks_tip_hash BLOB NOT NULL,        -- hash of highest known Stacks fork's tip block in this burn chain fork
+        canonical_stacks_tip_consensus_hash BLOB NOT NULL,   -- burn hash of highest known Stacks fork's tip block in this burn chain fork
 
         pox_valid INTEGER NOT NULL,
 
@@ -531,7 +531,7 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     CREATE TABLE snapshot_transition_ops(
-      sortition_id TEXT PRIMARY KEY,
+      sortition_id BLOB PRIMARY KEY,
       accepted_ops TEXT NOT NULL,
       consumed_keys TEXT NOT NULL
     );"#,
@@ -539,13 +539,13 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     -- all leader keys registered in the blockchain.
     -- contains pointers to the burn block and fork in which they occur
     CREATE TABLE leader_keys(
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
-        sortition_id TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
+        sortition_id BLOB NOT NULL,
 
-        consensus_hash TEXT NOT NULL,
+        consensus_hash BLOB NOT NULL,
         public_key TEXT NOT NULL,
         memo TEXT,
 
@@ -554,14 +554,14 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     CREATE TABLE block_commits(
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
-        sortition_id TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
+        sortition_id BLOB NOT NULL,
 
-        block_header_hash TEXT NOT NULL,
-        new_seed TEXT NOT NULL,
+        block_header_hash BLOB NOT NULL,
+        new_seed BLOB NOT NULL,
         parent_block_ptr INTEGER NOT NULL,
         parent_vtxindex INTEGER NOT NULL,
         key_block_ptr INTEGER NOT NULL,
@@ -579,10 +579,10 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     CREATE TABLE stack_stx (
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
 
         sender_addr TEXT NOT NULL,
         reward_addr TEXT NOT NULL,
@@ -596,10 +596,10 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     CREATE TABLE transfer_stx (
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
 
         sender_addr TEXT NOT NULL,
         recipient_addr TEXT NOT NULL,
@@ -613,9 +613,9 @@ const SORTITION_DB_INITIAL_SCHEMA: &[&str] = &[
     );"#,
     r#"
     CREATE TABLE missed_commits (
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         input TEXT NOT NULL,
-        intended_sortition_id TEXT NOT NULL,
+        intended_sortition_id BLOB NOT NULL,
 
         PRIMARY KEY(txid, intended_sortition_id)
     );"#,
@@ -634,10 +634,10 @@ const SORTITION_DB_SCHEMA_2: &[&str] = &[r#"
 
 const SORTITION_DB_SCHEMA_3: &[&str] = &[r#"
     CREATE TABLE block_commit_parents (
-        block_commit_txid TEXT NOT NULL,
-        block_commit_sortition_id TEXT NOT NULL,
+        block_commit_txid BLOB NOT NULL,
+        block_commit_sortition_id BLOB NOT NULL,
 
-        parent_sortition_id TEXT NOT NULL,
+        parent_sortition_id BLOB NOT NULL,
 
         PRIMARY KEY(block_commit_txid,block_commit_sortition_id),
         FOREIGN KEY(block_commit_txid,block_commit_sortition_id) REFERENCES block_commits(txid,sortition_id)
@@ -646,10 +646,10 @@ const SORTITION_DB_SCHEMA_3: &[&str] = &[r#"
 const SORTITION_DB_SCHEMA_4: &[&str] = &[
     r#"
     CREATE TABLE delegate_stx (
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
 
         sender_addr TEXT NOT NULL,
         delegate_to TEXT NOT NULL,
@@ -683,11 +683,11 @@ const SORTITION_DB_SCHEMA_8: &[&str] = &[
     r#"DROP INDEX IF EXISTS index_user_burn_support_sortition_id_vtxindex;"#,
     r#"DROP INDEX IF EXISTS index_user_burn_support_sortition_id_hash_160_key_vtxindex_key_block_ptr_vtxindex;"#,
     r#"DROP TABLE IF EXISTS user_burn_support;"#,
-    r#"ALTER TABLE snapshots ADD miner_pk_hash TEXT DEFAULT NULL"#,
+    r#"ALTER TABLE snapshots ADD miner_pk_hash BLOB DEFAULT NULL"#,
     r#"
     -- eagerly-processed reward sets, before they're applied to the start of the next reward cycle
     CREATE TABLE preprocessed_reward_sets (
-        sortition_id TEXT PRIMARY KEY,
+        sortition_id BLOB PRIMARY KEY,
         reward_set TEXT NOT NULL
     );"#,
     r#"
@@ -695,9 +695,9 @@ const SORTITION_DB_SCHEMA_8: &[&str] = &[
     -- This is updated in both 2.x and Nakamoto, but Nakamoto relies on this exclusively.
     -- Maintenance of this table is abandoned in schema 11, which replaces this table with `stacks_chain_tips_by_burn_view`
     CREATE TABLE stacks_chain_tips (
-        sortition_id TEXT PRIMARY KEY,
-        consensus_hash TEXT NOT NULL,
-        block_hash TEXT NOT NULL,
+        sortition_id BLOB PRIMARY KEY,
+        consensus_hash BLOB NOT NULL,
+        block_hash BLOB NOT NULL,
         block_height INTEGER NOT NULL
     );"#,
     r#"ALTER TABLE stack_stx ADD signer_key TEXT DEFAULT NULL;"#,
@@ -706,10 +706,10 @@ const SORTITION_DB_SCHEMA_8: &[&str] = &[
     r#"
     -- table definition for `vote-for-aggregate-key` burn op
     CREATE TABLE vote_for_aggregate_key (
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         vtxindex INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
-        burn_header_hash TEXT NOT NULL,
+        burn_header_hash BLOB NOT NULL,
 
         sender_addr TEXT NOT NULL,
         aggregate_key TEXT NOT NULL,
@@ -731,10 +731,10 @@ static SORTITION_DB_SCHEMA_11: &[&str] = &[r#"
     -- Unlike `stacks_chain_tips`, rows in this table are only inserted for Nakamoto blocks
     -- if they happen to have the same burn view as the given sortition.
     CREATE TABLE stacks_chain_tips_by_burn_view (
-        sortition_id TEXT PRIMARY KEY,
-        consensus_hash TEXT NOT NULL, 
-        burn_view_consensus_hash TEXT NOT NULL,
-        block_hash TEXT NOT NULL,
+        sortition_id BLOB PRIMARY KEY,
+        consensus_hash BLOB NOT NULL, 
+        burn_view_consensus_hash BLOB NOT NULL,
+        block_hash BLOB NOT NULL,
         block_height INTEGER NOT NULL,
         FOREIGN KEY(burn_view_consensus_hash) REFERENCES snapshots(consensus_hash),
         FOREIGN KEY(consensus_hash) REFERENCES snapshots(consensus_hash)
@@ -5584,7 +5584,7 @@ impl SortitionHandleTx<'_> {
         new_sortition: &SortitionId,
         transition: &BurnchainStateTransition,
     ) {
-        let create = "CREATE TABLE IF NOT EXISTS snapshot_burn_distributions (sortition_id TEXT PRIMARY KEY, data TEXT NOT NULL);";
+        let create = "CREATE TABLE IF NOT EXISTS snapshot_burn_distributions (sortition_id BLOB PRIMARY KEY, data TEXT NOT NULL);";
         self.execute(create, NO_PARAMS).unwrap();
         let sql = "INSERT INTO snapshot_burn_distributions (sortition_id, data) VALUES (?, ?)";
         let args = params![

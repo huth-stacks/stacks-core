@@ -205,7 +205,7 @@ fn txid_tracking_db(chainstate_root_path: &str) -> Result<DBConn, DatabaseError>
 
     if create_flag {
         conn.execute(
-            "CREATE TABLE processed_txids (txid TEXT NOT NULL PRIMARY KEY)",
+            "CREATE TABLE processed_txids (txid BLOB NOT NULL PRIMARY KEY)",
             NO_PARAMS,
         )?;
     }
