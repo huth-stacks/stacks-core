@@ -1,0 +1,65 @@
+# Docker Compose for running a Stacks mainnet follower node
+#
+# Usage:
+#   1. Copy sample/conf/mainnet-follower-conf.toml to ./config/stacks-node.toml
+#   2. Edit config:
+#      - Set working_dir = "/data"
+#      - Set peer_host = "bitcoin" (the Docker service name, not 127.0.0.1)
+#      - Set username/password to match BITCOIN_RPC_USER/BITCOIN_RPC_PASSWORD below
+#   3. Set your Bitcoin RPC password: export BITCOIN_RPC_PASSWORD=<your-password>
+#   4. Run: docker compose up -d
+
+services:
+  bitcoin:
+    image: lncm/bitcoind:v27.1
+    restart: on-failure
+    volumes:
+      - bitcoin-data:/data/.bitcoin
+    ports:
+      - "8333:8333"
+    environment:
+      - BITCOIN_DATA=/data/.bitcoin
+    command:
+      - -server=1
+      - -txindex=0
+      - -prune=50000
+      - -rpcuser=${BITCOIN_RPC_USER:-stacks}
+      - -rpcpassword=${BITCOIN_RPC_PASSWORD:?Set BITCOIN_RPC_PASSWORD environment variable}
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -dbcache=2048
+    healthcheck:
+      test: ["CMD", "bitcoin-cli", "-rpcuser=${BITCOIN_RPC_USER:-stacks}", "-rpcpassword=${BITCOIN_RPC_PASSWORD}", "getblockchaininfo"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  stacks-node:
+    image: ghcr.io/stacks-network/stacks-core:latest
+    restart: on-failure
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+    volumes:
+      - stacks-data:/data
+      - ./config:/etc/stacks:ro
+    ports:
+      - "20443:20443"
+      - "20444:20444"
+      - "9153:9153"
+    environment:
+      - RUST_BACKTRACE=1
+    command: ["stacks-node", "start", "--config", "/etc/stacks/stacks-node.toml"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:20443/v2/info > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    ulimits:
+      nofile:
+        soft: 524288
+        hard: 524288
+
+volumes:
+  bitcoin-data:
+  stacks-data:
