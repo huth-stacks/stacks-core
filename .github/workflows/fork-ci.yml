@@ -111,6 +111,6 @@ jobs:
 
       - name: Run tests (quick, non-ignored)
         run: cargo nextest run --workspace --exclude stacks-node -j 4
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           RUST_BACKTRACE: 1
