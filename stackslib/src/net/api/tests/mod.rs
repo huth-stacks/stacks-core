@@ -45,9 +45,11 @@ use crate::chainstate::stacks::{
     TransactionAuth, TransactionPayload, TransactionPostConditionMode, TransactionVersion,
 };
 use crate::core::MemPoolDB;
+use crate::net::connection::ConnectionOptions;
 use crate::net::db::PeerDB;
+use crate::net::http::{HttpResponseContents, HttpResponsePreamble};
 use crate::net::httpcore::{
-    HttpPreambleExtensions as _, StacksHttpRequest, StacksHttpResponse, TipRequest,
+    HttpPreambleExtensions as _, StacksHttp, StacksHttpRequest, StacksHttpResponse, TipRequest,
 };
 use crate::net::relay::Relayer;
 use crate::net::rpc::ConversationHttp;
@@ -86,6 +88,7 @@ mod getmicroblocks_indexed;
 mod getmicroblocks_unconfirmed;
 mod getneighbors;
 mod getpoxinfo;
+mod getready;
 mod getsigner;
 mod getsortition;
 mod getstackerdbchunk;
@@ -202,6 +205,45 @@ fn convo_send_recv(sender: &mut ConversationHttp, receiver: &mut ConversationHtt
             break;
         }
     }
+}
+
+fn run_json_request_with_ibd(
+    mut rpc_test: TestRPC<'_>,
+    request: StacksHttpRequest,
+    ibd: bool,
+) -> (HttpResponsePreamble, serde_json::Value) {
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 33333);
+    let mut http = StacksHttp::new(addr, &ConnectionOptions::default());
+
+    rpc_test.peer_2.refresh_burnchain_view();
+
+    let peer_2_sortdb = rpc_test.peer_2.chain.sortdb.take().unwrap();
+    let mut peer_2_stacks_node = rpc_test.peer_2.chain.stacks_node.take().unwrap();
+    let mut peer_2_mempool = rpc_test.peer_2.mempool.take().unwrap();
+
+    let rpc_args = rpc_test
+        .peer_2
+        .rpc_handler_args
+        .as_ref()
+        .map(|args_type| args_type.instantiate())
+        .unwrap_or(RPCHandlerArgsType::make_default());
+    let mut node_state = StacksNodeState::new(
+        &mut rpc_test.peer_2.network,
+        &peer_2_sortdb,
+        &mut peer_2_stacks_node.chainstate,
+        &mut peer_2_mempool,
+        &rpc_args,
+        ibd,
+        rpc_test.peer_2.config.chain_config.txindex,
+    );
+
+    let (preamble, contents) = http.try_handle_request(request, &mut node_state).unwrap();
+    let body = match contents {
+        HttpResponseContents::RAM(bytes) => serde_json::from_slice(&bytes).unwrap(),
+        HttpResponseContents::Stream(..) => panic!("Expected in-memory JSON response"),
+    };
+
+    (preamble, body)
 }
 
 /// TestRPC state
@@ -1423,11 +1465,13 @@ fn prefixed_hex_serialization() {
 /// header is set to the correct value for successful responses.
 #[rstest]
 #[case::getinfo(|addr| StacksHttpRequest::new_getinfo(addr, None))]
+#[case::gethealth(StacksHttpRequest::new_gethealth)]
 #[case::getneighbors(StacksHttpRequest::new_getneighbors)]
 #[case::getpoxinfo(|addr| StacksHttpRequest::new_getpoxinfo(
     addr,
     TipRequest::UseLatestUnconfirmedTip,
 ))]
+#[case::getready(StacksHttpRequest::new_getready)]
 fn test_successfull_responses_have_correct_canonical_stacks_tip_height(
     #[case] request_builder: impl Fn(PeerHost) -> StacksHttpRequest,
 ) {
