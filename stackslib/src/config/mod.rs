@@ -3894,7 +3894,8 @@ pub struct NodeConfigFile {
 
 impl NodeConfigFile {
     fn into_config_default(self, default_node_config: NodeConfig) -> Result<NodeConfig, String> {
-        let rpc_bind = self.rpc_bind.unwrap_or(default_node_config.rpc_bind);
+        let rpc_bind = std::env::var("STACKS_RPC_BIND")
+            .unwrap_or(self.rpc_bind.unwrap_or(default_node_config.rpc_bind));
         let miner = self.miner.unwrap_or(default_node_config.miner);
         let stacker = self.stacker.unwrap_or(default_node_config.stacker);
         let node_config = NodeConfig {
@@ -3907,7 +3908,8 @@ impl NodeConfigFile {
             working_dir: std::env::var("STACKS_WORKING_DIR")
                 .unwrap_or(self.working_dir.unwrap_or(default_node_config.working_dir)),
             rpc_bind: rpc_bind.clone(),
-            p2p_bind: self.p2p_bind.unwrap_or(default_node_config.p2p_bind),
+            p2p_bind: std::env::var("STACKS_P2P_BIND")
+                .unwrap_or(self.p2p_bind.unwrap_or(default_node_config.p2p_bind)),
             p2p_address: self.p2p_address.unwrap_or(rpc_bind.clone()),
             bootstrap_node: vec![],
             deny_nodes: vec![],
@@ -3949,7 +3951,9 @@ impl NodeConfigFile {
             next_initiative_delay: self
                 .next_initiative_delay
                 .unwrap_or(default_node_config.next_initiative_delay),
-            prometheus_bind: self.prometheus_bind,
+            prometheus_bind: std::env::var("STACKS_PROMETHEUS_BIND")
+                .ok()
+                .or(self.prometheus_bind),
             marf_cache_strategy: self.marf_cache_strategy,
             marf_defer_hashing: self
                 .marf_defer_hashing
