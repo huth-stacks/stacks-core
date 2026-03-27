@@ -1119,17 +1119,14 @@ impl EventDispatcher {
             });
 
             let Some(observer) = observer else {
-                // This observer is no longer registered, skip and delete
+                // No matching observer found. This could be because the observer was
+                // removed from config, or because the endpoint URL failed to parse.
+                // Keep the payload in DB rather than deleting — it will be retried on
+                // next restart when the observer may be reconfigured correctly.
                 info!(
-                    "Event dispatcher: observer {} no longer registered, skipping",
-                    request_data.url
+                    "Event dispatcher: no matching observer for pending payload, keeping for retry";
+                    "url" => &request_data.url
                 );
-                if let Err(e) = conn.delete_payload(id) {
-                    error!(
-                        "Event observer: failed to delete pending payload from database";
-                        "error" => ?e
-                    );
-                }
                 continue;
             };
 
