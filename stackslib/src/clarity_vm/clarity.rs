@@ -2345,14 +2345,14 @@ mod tests {
 
         tx.execute(
             "CREATE TABLE IF NOT EXISTS data_table
-                      (key TEXT PRIMARY KEY, value TEXT)",
+                      (key BLOB PRIMARY KEY, value TEXT)",
             NO_PARAMS,
         )
         .unwrap();
 
         tx.execute(
             "CREATE TABLE IF NOT EXISTS metadata_table
-                      (key TEXT NOT NULL, blockhash TEXT, value TEXT,
+                      (key TEXT NOT NULL, blockhash BLOB, value TEXT,
                        UNIQUE (key, blockhash))",
             NO_PARAMS,
         )

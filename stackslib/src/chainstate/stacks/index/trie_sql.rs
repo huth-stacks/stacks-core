@@ -35,7 +35,7 @@ use crate::util_lib::db::{query_count, query_row, tx_begin_immediate, u64_to_sql
 static SQL_MARF_DATA_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS marf_data (
    block_id INTEGER PRIMARY KEY, 
-   block_hash TEXT UNIQUE NOT NULL,
+   block_hash BLOB UNIQUE NOT NULL,
    -- the trie itself.
    -- if not used, then set to a zero-byte entry.
    data BLOB NOT NULL,
@@ -48,7 +48,7 @@ CREATE INDEX IF NOT EXISTS unconfirmed_marf_data ON marf_data(unconfirmed);
 static SQL_MARF_MINED_TABLE: &str = "
 CREATE TABLE IF NOT EXISTS mined_blocks (
    block_id INTEGER PRIMARY KEY, 
-   block_hash TEXT UNIQUE NOT NULL,
+   block_hash BLOB UNIQUE NOT NULL,
    data BLOB NOT NULL
 );
 
@@ -56,7 +56,7 @@ CREATE INDEX IF NOT EXISTS block_hash_mined_blocks ON mined_blocks(block_hash);
 ";
 
 static SQL_EXTENSION_LOCKS_TABLE: &str = "
-CREATE TABLE IF NOT EXISTS block_extension_locks (block_hash TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS block_extension_locks (block_hash BLOB PRIMARY KEY);
 ";
 
 static SQL_MARF_DATA_TABLE_SCHEMA_2: &str = "

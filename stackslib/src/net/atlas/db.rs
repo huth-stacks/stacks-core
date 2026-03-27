@@ -41,7 +41,7 @@ use rusqlite::{params, Connection, OpenFlags, Row, Transaction};
 use stacks_common::types::chainstate::StacksBlockId;
 use stacks_common::types::sqlite::NO_PARAMS;
 use stacks_common::util;
-use stacks_common::util::hash::{to_hex, Hash160};
+use stacks_common::util::hash::Hash160;
 
 use super::{AtlasConfig, Attachment, AttachmentInstance};
 use crate::burnchains::Txid;
@@ -64,22 +64,22 @@ pub const MAX_PROCESS_PER_ROUND: u32 = 1_000;
 const ATLASDB_INITIAL_SCHEMA: &[&str] = &[
     r#"
     CREATE TABLE attachments(
-        hash TEXT UNIQUE PRIMARY KEY,
+        hash BLOB UNIQUE PRIMARY KEY,
         content BLOB NOT NULL,
         was_instantiated INTEGER NOT NULL,
         created_at INTEGER NOT NULL
     );"#,
     r#"
     CREATE TABLE attachment_instances(
-        content_hash TEXT,
+        content_hash BLOB,
         created_at INTEGER NOT NULL,
-        index_block_hash STRING NOT NULL,
+        index_block_hash BLOB NOT NULL,
         attachment_index INTEGER NOT NULL,
         block_height INTEGER NOT NULL,
         is_available INTEGER NOT NULL,
         metadata TEXT NOT NULL,
         contract_id STRING NOT NULL,
-        tx_id STRING NOT NULL,
+        tx_id BLOB NOT NULL,
         PRIMARY KEY(index_block_hash, contract_id, attachment_index)
     );"#,
     "CREATE TABLE db_config(version TEXT NOT NULL);",
@@ -130,16 +130,14 @@ impl FromRow<Attachment> for Attachment {
 
 impl FromRow<AttachmentInstance> for AttachmentInstance {
     fn from_row(row: &Row) -> Result<AttachmentInstance, db_error> {
-        let hex_content_hash: String = row.get_unwrap("content_hash");
+        let content_hash: Hash160 = row.get_unwrap("content_hash");
         let attachment_index: u32 = row.get_unwrap("attachment_index");
         let block_height =
             u64::from_column(row, "block_height").map_err(|_| db_error::TypeError)?;
-        let content_hash = Hash160::from_hex(&hex_content_hash).map_err(|_| db_error::TypeError)?;
         let index_block_hash = StacksBlockId::from_column(row, "index_block_hash")?;
         let metadata: String = row.get_unwrap("metadata");
         let contract_id = QualifiedContractIdentifier::from_column(row, "contract_id")?;
-        let hex_tx_id: String = row.get_unwrap("tx_id");
-        let tx_id = Txid::from_hex(&hex_tx_id).map_err(|_| db_error::TypeError)?;
+        let tx_id: Txid = row.get_unwrap("tx_id");
 
         Ok(AttachmentInstance {
             content_hash,
@@ -595,10 +593,9 @@ impl AtlasDB {
         &mut self,
         content_hash: &Hash160,
     ) -> Result<Option<Attachment>, db_error> {
-        let hex_content_hash = to_hex(&content_hash.0[..]);
         let qry = "SELECT content, hash FROM attachments WHERE hash = ?1 AND was_instantiated = 0"
             .to_string();
-        let args = params![hex_content_hash];
+        let args = params![content_hash];
         let row = query_row::<Attachment, _>(&self.conn, &qry, args)?;
         Ok(row)
     }
@@ -631,18 +628,16 @@ impl AtlasDB {
         &self,
         content_hash: &Hash160,
     ) -> Result<Vec<AttachmentInstance>, db_error> {
-        let hex_content_hash = to_hex(&content_hash.0[..]);
         let qry = "SELECT * FROM attachment_instances WHERE content_hash = ?1 AND status = ?2";
-        let args = params![hex_content_hash, AttachmentInstanceStatus::Checked];
+        let args = params![content_hash, AttachmentInstanceStatus::Checked];
         let rows = query_rows(&self.conn, qry, args)?;
         Ok(rows)
     }
 
     pub fn find_attachment(&self, content_hash: &Hash160) -> Result<Option<Attachment>, db_error> {
-        let hex_content_hash = to_hex(&content_hash.0[..]);
         let qry = "SELECT content, hash FROM attachments WHERE hash = ?1 AND was_instantiated = 1"
             .to_string();
-        let args = params![hex_content_hash];
+        let args = params![content_hash];
         let row = query_row::<Attachment, _>(&self.conn, &qry, args)?;
         Ok(row)
     }

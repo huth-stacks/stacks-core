@@ -58,9 +58,9 @@ const STACKER_DB_SCHEMA: &[&str] = &[
         -- lamport clock of the chunk.
         version INTEGER NOT NULL,
         -- hash of the data to be stored
-        data_hash TEXT NOT NULL,
+        data_hash BLOB NOT NULL,
         -- secp256k1 recoverable signature from the stacker over the above columns
-        signature TEXT NOT NULL,
+        signature BLOB NOT NULL,
 
         -- the following is NOT covered by the signature
         -- address of the creator of this chunk
@@ -93,12 +93,8 @@ impl FromRow<SlotMetadata> for SlotMetadata {
     fn from_row(row: &Row) -> Result<SlotMetadata, db_error> {
         let slot_id: u32 = row.get_unwrap("slot_id");
         let slot_version: u32 = row.get_unwrap("version");
-        let data_hash_str: String = row.get_unwrap("data_hash");
-        let data_hash =
-            Sha512Trunc256Sum::from_hex(&data_hash_str).map_err(|_| db_error::ParseError)?;
-        let message_sig_str: String = row.get_unwrap("signature");
-        let signature =
-            MessageSignature::from_hex(&message_sig_str).map_err(|_| db_error::ParseError)?;
+        let data_hash = Sha512Trunc256Sum::from_column(row, "data_hash")?;
+        let signature = MessageSignature::from_column(row, "signature")?;
 
         Ok(SlotMetadata {
             slot_id,

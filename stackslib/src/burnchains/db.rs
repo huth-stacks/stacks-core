@@ -209,9 +209,9 @@ CREATE TABLE IF NOT EXISTS  burnchain_db_block_headers (
     -- height of the block (non-negative)
     block_height INTEGER NOT NULL,
     -- 32-byte hash of the block
-    block_hash TEXT UNIQUE NOT NULL,
+    block_hash BLOB UNIQUE NOT NULL,
     -- 32-byte hash of this block's parent block
-    parent_block_hash TEXT NOT NULL,
+    parent_block_hash BLOB NOT NULL,
     -- number of transactions in this block
     num_txs INTEGER NOT NULL,
     -- Unix timestamp at which this block was mined
@@ -222,11 +222,11 @@ CREATE TABLE IF NOT EXISTS  burnchain_db_block_headers (
 
 CREATE TABLE IF NOT EXISTS  burnchain_db_block_ops (
     -- 32-byte hash of the block that contains this parsed operation
-    block_hash TEXT NOT NULL,
+    block_hash BLOB NOT NULL,
     -- opaque serialized operation (e.g. a JSON string)
     op TEXT NOT NULL,
     -- 32-byte transaction ID
-    txid TEXT NOT NULL,
+    txid BLOB NOT NULL,
 
     -- This should have been present when we created this table, but we forgot.
     -- So instead, query methods against this table need to use REPLACE INTO and
@@ -255,9 +255,9 @@ CREATE TABLE IF NOT EXISTS anchor_blocks (
 
 CREATE TABLE IF NOT EXISTS block_commit_metadata (
     -- 32-byte hash of the burnchain block that contains this block-cmmit
-    burn_block_hash TEXT NOT NULL,
+    burn_block_hash BLOB NOT NULL,
     -- 32-byte hash of the transaction that contains this block-commit
-    txid TEXT NOT NULL,
+    txid BLOB NOT NULL,
     -- height of the burnchain block in which this block-commit can be found
     block_height INTEGER NOT NULL,
     -- index into the list of transactions in this block at which this block-commit can be found
@@ -309,8 +309,8 @@ const BURNCHAIN_DB_INDEXES: &[&str] = &[
 // Required to drop old affirmation maps from Burnchain DB schema V2 and migrate to V3
 const BURNCHAIN_DB_MIGRATION_V2_TO_V3: &str = r#"
     CREATE TABLE IF NOT EXISTS block_commit_metadata_new (
-        burn_block_hash TEXT NOT NULL,
-        txid TEXT NOT NULL,
+        burn_block_hash BLOB NOT NULL,
+        txid BLOB NOT NULL,
         block_height INTEGER NOT NULL,
         vtxindex INTEGER NOT NULL,
         anchor_block INTEGER,

@@ -15,6 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use clarity_types::errors::IncomparableError;
+use rusqlite::types::ToSql;
 use rusqlite::{Connection, OptionalExtension, params};
 use stacks_common::types::chainstate::{BlockHeaderHash, StacksBlockId, TrieHash};
 use stacks_common::types::sqlite::NO_PARAMS;
@@ -36,19 +37,26 @@ pub struct SqliteConnection {
     conn: Connection,
 }
 
-fn sqlite_put(conn: &Connection, key: &str, value: &str) -> Result<(), VmExecutionError> {
+fn sqlite_put<K: ToSql + ?Sized>(
+    conn: &Connection,
+    key: &K,
+    value: &str,
+) -> Result<(), VmExecutionError> {
     let params = params![key, value];
     match conn.execute("REPLACE INTO data_table (key, value) VALUES (?, ?)", params) {
         Ok(_) => Ok(()),
         Err(e) => {
-            error!("Failed to insert/replace ({key},{value}): {e:?}");
+            error!("Failed to insert/replace side-store data: {e:?}");
             Err(VmInternalError::DBError(SQL_FAIL_MESSAGE.into()).into())
         }
     }
 }
 
-fn sqlite_get(conn: &Connection, key: &str) -> Result<Option<String>, VmExecutionError> {
-    trace!("sqlite_get {key}");
+fn sqlite_get<K: ToSql + ?Sized>(
+    conn: &Connection,
+    key: &K,
+) -> Result<Option<String>, VmExecutionError> {
+    trace!("sqlite_get");
     let params = params![key];
     let res = match conn
         .query_row(
@@ -60,16 +68,19 @@ fn sqlite_get(conn: &Connection, key: &str) -> Result<Option<String>, VmExecutio
     {
         Ok(x) => Ok(x),
         Err(e) => {
-            error!("Failed to query '{key}': {e:?}");
+            error!("Failed to query side-store data: {e:?}");
             Err(VmInternalError::DBError(SQL_FAIL_MESSAGE.into()).into())
         }
     };
 
-    trace!("sqlite_get {key}: {res:?}");
+    trace!("sqlite_get: {res:?}");
     res
 }
 
-fn sqlite_has_entry(conn: &Connection, key: &str) -> Result<bool, VmExecutionError> {
+fn sqlite_has_entry<K: ToSql + ?Sized>(
+    conn: &Connection,
+    key: &K,
+) -> Result<bool, VmExecutionError> {
     Ok(sqlite_get(conn, key)?.is_some())
 }
 
@@ -130,11 +141,18 @@ pub fn sqlite_get_metadata_manual(
 }
 
 impl SqliteConnection {
-    pub fn put(conn: &Connection, key: &str, value: &str) -> Result<(), VmExecutionError> {
+    pub fn put<K: ToSql + ?Sized>(
+        conn: &Connection,
+        key: &K,
+        value: &str,
+    ) -> Result<(), VmExecutionError> {
         sqlite_put(conn, key, value)
     }
 
-    pub fn get(conn: &Connection, key: &str) -> Result<Option<String>, VmExecutionError> {
+    pub fn get<K: ToSql + ?Sized>(
+        conn: &Connection,
+        key: &K,
+    ) -> Result<Option<String>, VmExecutionError> {
         sqlite_get(conn, key)
     }
 
@@ -222,14 +240,14 @@ impl SqliteConnection {
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS data_table
-                      (key TEXT PRIMARY KEY, value TEXT)",
+                      (key BLOB PRIMARY KEY, value TEXT)",
             NO_PARAMS,
         )
         .map_err(|x| VmInternalError::SqliteError(IncomparableError { err: x }))?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS metadata_table
-                      (key TEXT NOT NULL, blockhash TEXT, value TEXT,
+                      (key TEXT NOT NULL, blockhash BLOB, value TEXT,
                        UNIQUE (key, blockhash))",
             NO_PARAMS,
         )

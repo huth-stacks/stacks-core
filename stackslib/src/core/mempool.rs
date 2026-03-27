@@ -699,17 +699,17 @@ impl FromRow<(u64, u64)> for (u64, u64) {
 
 const MEMPOOL_INITIAL_SCHEMA: &[&str] = &[r#"
     CREATE TABLE mempool(
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         origin_address TEXT NOT NULL,
         origin_nonce INTEGER NOT NULL,
         sponsor_address TEXT NOT NULL,
         sponsor_nonce INTEGER NOT NULL,
         tx_fee INTEGER NOT NULL,
         length INTEGER NOT NULL,
-        consensus_hash TEXT NOT NULL,
+        consensus_hash BLOB NOT NULL,
         -- In epoch2x, this is the Stacks tip block hash at the time of this tx's arrival.
         -- In Nakamoto, this is the tenure-start block hash of the ongoing tenure at the time of this tx's arrival.
-        block_header_hash TEXT NOT NULL,
+        block_header_hash BLOB NOT NULL,
         -- This is the *coinbase height* of the chain tip above.
         -- In epoch2x (when this schema was written), this also happened to be the block height; hence the name.
         -- In Nakamoto, this is not a block height any longer.
@@ -725,7 +725,7 @@ const MEMPOOL_INITIAL_SCHEMA: &[&str] = &[r#"
 const MEMPOOL_SCHEMA_2_COST_ESTIMATOR: &[&str] = &[
     r#"
     CREATE TABLE fee_estimates(
-        txid TEXT NOT NULL,
+        txid BLOB NOT NULL,
         fee_rate NUMBER,
         PRIMARY KEY (txid),
         FOREIGN KEY (txid) REFERENCES mempool (txid) ON DELETE CASCADE ON UPDATE CASCADE
@@ -750,7 +750,7 @@ const MEMPOOL_SCHEMA_2_COST_ESTIMATOR: &[&str] = &[
 const MEMPOOL_SCHEMA_3_BLOOM_STATE: &[&str] = &[
     r#"
     CREATE TABLE IF NOT EXISTS removed_txids(
-        txid TEXT PRIMARY KEY NOT NULL,
+        txid BLOB PRIMARY KEY NOT NULL,
         FOREIGN KEY(txid) REFERENCES mempool(txid) ON DELETE CASCADE
     );
     "#,
@@ -758,8 +758,8 @@ const MEMPOOL_SCHEMA_3_BLOOM_STATE: &[&str] = &[
     -- mapping between hash(local-seed,txid) and txid, used for randomized but efficient
     -- paging when streaming transactions out of the mempool.
     CREATE TABLE IF NOT EXISTS randomized_txids(
-        txid TEXT PRIMARY KEY NOT NULL,
-        hashed_txid TEXT NOT NULL,
+        txid BLOB PRIMARY KEY NOT NULL,
+        hashed_txid BLOB NOT NULL,
         FOREIGN KEY(txid) REFERENCES mempool(txid) ON DELETE CASCADE
     );
     "#,
@@ -774,7 +774,7 @@ const MEMPOOL_SCHEMA_4_BLACKLIST: &[&str] = &[
     -- `arrival_time` indicates when the entry was created. This is used to garbage-collect the list.
     -- A transaction that is blacklisted may still be served from the mempool, but it will never be (re)submitted.
     CREATE TABLE IF NOT EXISTS tx_blacklist(
-        txid TEXT PRIMARY KEY NOT NULL,
+        txid BLOB PRIMARY KEY NOT NULL,
         arrival_time INTEGER NOT NULL
     );
     "#,
@@ -849,7 +849,7 @@ const MEMPOOL_SCHEMA_8_NONCE_SORTING: &'static [&'static str] = &[
     r#"
     -- Add table to track considered transactions
     CREATE TABLE IF NOT EXISTS considered_txs(
-        txid TEXT PRIMARY KEY NOT NULL,
+        txid BLOB PRIMARY KEY NOT NULL,
         FOREIGN KEY(txid) REFERENCES mempool(txid) ON DELETE CASCADE
     );
     "#,
