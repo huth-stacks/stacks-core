@@ -92,6 +92,7 @@ enum EventDispatcherError {
     SerializationError(serde_json::Error),
     HttpError(std::io::Error),
     DbError(stacks::util_lib::db::Error),
+    UrlParseError(String),
 }
 
 impl fmt::Display for EventDispatcherError {
@@ -100,6 +101,7 @@ impl fmt::Display for EventDispatcherError {
             EventDispatcherError::SerializationError(ref e) => fmt::Display::fmt(e, f),
             EventDispatcherError::HttpError(ref e) => fmt::Display::fmt(e, f),
             EventDispatcherError::DbError(ref e) => fmt::Display::fmt(e, f),
+            EventDispatcherError::UrlParseError(ref s) => write!(f, "URL parse error: {s}"),
         }
     }
 }
@@ -110,6 +112,7 @@ impl core::error::Error for EventDispatcherError {
             EventDispatcherError::SerializationError(ref e) => Some(e),
             EventDispatcherError::HttpError(ref e) => Some(e),
             EventDispatcherError::DbError(ref e) => Some(e),
+            EventDispatcherError::UrlParseError(_) => None,
         }
     }
 }
@@ -1159,10 +1162,19 @@ impl EventDispatcher {
             "Event dispatcher: Sending payload"; "url" => &data.url, "bytes" => data.payload_bytes.len()
         );
 
-        let url = Url::parse(&data.url)
-            .unwrap_or_else(|_| panic!("Event dispatcher: unable to parse {} as a URL", data.url));
+        let url = Url::parse(&data.url).map_err(|e| {
+            error!(
+                "Event dispatcher: unable to parse URL";
+                "url" => &data.url,
+                "error" => %e
+            );
+            EventDispatcherError::UrlParseError(data.url.clone())
+        })?;
 
-        let host = url.host_str().expect("Invalid URL: missing host");
+        let host = url.host_str().ok_or_else(|| {
+            error!("Event dispatcher: URL missing host"; "url" => %url);
+            EventDispatcherError::UrlParseError(format!("missing host in URL: {url}"))
+        })?;
         let port = url.port_or_known_default().unwrap_or(80);
         let peerhost: PeerHost = format!("{host}:{port}")
             .parse()
@@ -1170,17 +1182,30 @@ impl EventDispatcher {
 
         let mut backoff = Duration::from_millis(100);
         let mut attempts: i32 = 0;
+        let max_attempts: i32 = 25;
         // Cap the backoff at 3x the timeout
         let max_backoff = data.timeout.saturating_mul(3);
 
         loop {
-            let mut request = StacksHttpRequest::new_for_peer(
+            let mut request = match StacksHttpRequest::new_for_peer(
                 peerhost.clone(),
                 "POST".into(),
                 url.path().into(),
                 HttpRequestContents::new().payload_json_bytes(Arc::clone(&data.payload_bytes)),
-            )
-            .unwrap_or_else(|_| panic!("FATAL: failed to encode infallible data as HTTP request"));
+            ) {
+                Ok(req) => req,
+                Err(e) => {
+                    error!(
+                        "Event dispatcher: failed to encode HTTP request";
+                        "url" => %url,
+                        "error" => %e
+                    );
+                    return Err(EventDispatcherError::HttpError(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("failed to encode HTTP request: {e}"),
+                    )));
+                }
+            };
             request.add_header("Connection".into(), "close".into());
             match send_http_request(host, port, request, data.timeout) {
                 Ok(response) => {
@@ -1215,13 +1240,26 @@ impl EventDispatcher {
                 }
             }
 
+            attempts = attempts.saturating_add(1);
+            if attempts >= max_attempts {
+                error!(
+                    "Event dispatcher: giving up after max retries";
+                    "url" => %url,
+                    "attempts" => attempts,
+                    "max_attempts" => max_attempts
+                );
+                return Err(EventDispatcherError::HttpError(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("event observer at {url} unreachable after {attempts} attempts"),
+                )));
+            }
+
             sleep(backoff);
             let jitter: u64 = rand::thread_rng().gen_range(0..100);
             backoff = std::cmp::min(
                 backoff.saturating_mul(2) + Duration::from_millis(jitter),
                 max_backoff,
             );
-            attempts = attempts.saturating_add(1);
         }
 
         Ok(())
