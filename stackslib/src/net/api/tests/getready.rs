@@ -16,7 +16,8 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use super::{run_json_request_with_ibd, TestRPC};
-use crate::net::api::gethealth::{RPCGetHealthRequestHandler, RPCGetHealthResponse, RPCNodeStatus};
+use crate::net::api::gethealth::{RPCGetHealthResponse, RPCNodeStatus};
+use crate::net::api::getready::RPCGetReadyRequestHandler;
 use crate::net::connection::ConnectionOptions;
 use crate::net::httpcore::{StacksHttp, StacksHttpRequest};
 use crate::net::ProtocolFamily;
@@ -26,11 +27,11 @@ fn test_try_parse_request() {
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 33333);
     let mut http = StacksHttp::new(addr, &ConnectionOptions::default());
 
-    let request = StacksHttpRequest::new_gethealth(addr.into());
+    let request = StacksHttpRequest::new_getready(addr.into());
     let bytes = request.try_serialize().unwrap();
 
     let (parsed_preamble, offset) = http.read_preamble(&bytes).unwrap();
-    let mut handler = RPCGetHealthRequestHandler::new();
+    let mut handler = RPCGetReadyRequestHandler::new();
     let mut parsed_request = http
         .handle_try_parse_request(
             &mut handler,
@@ -47,14 +48,14 @@ fn test_try_parse_request() {
 }
 
 #[test]
-fn test_get_health_returns_structured_status_when_synced() {
+fn test_get_ready_returns_ok_when_fully_synced() {
     let mut rpc_test = TestRPC::setup(function_name!());
     rpc_test.peer_2.refresh_burnchain_view();
     let expected_stacks_tip_height = rpc_test.peer_2.network.stacks_tip.height;
     let expected_burn_block_height = rpc_test.peer_2.network.chain_view.burn_block_height;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 33333);
-    let request = StacksHttpRequest::new_gethealth(addr.into());
+    let request = StacksHttpRequest::new_getready(addr.into());
     let mut responses = rpc_test.run(vec![request]);
     let response = responses.remove(0);
 
@@ -64,54 +65,37 @@ fn test_get_health_returns_structured_status_when_synced() {
     let response_json_val: serde_json::Value = contents
         .try_into()
         .unwrap_or_else(|e| panic!("Failed to parse JSON: {e}"));
-    let health_response: RPCGetHealthResponse = serde_json::from_value(response_json_val)
+    let ready_response: RPCGetHealthResponse = serde_json::from_value(response_json_val)
         .unwrap_or_else(|e| panic!("Failed to deserialize RPCGetHealthResponse: {e}"));
 
-    assert_eq!(
-        health_response.status,
-        RPCNodeStatus::Healthy,
-        "Expected a healthy node status"
-    );
-    assert_eq!(
-        health_response.stacks_tip_height, expected_stacks_tip_height,
-        "Mismatch in stacks_tip_height"
-    );
-    assert_eq!(
-        health_response.burn_block_height, expected_burn_block_height,
-        "Mismatch in burn_block_height"
-    );
-    assert!(health_response.is_fully_synced);
-    assert!(!health_response.server_version.is_empty());
+    assert_eq!(ready_response.status, RPCNodeStatus::Healthy);
+    assert_eq!(ready_response.stacks_tip_height, expected_stacks_tip_height);
+    assert_eq!(ready_response.burn_block_height, expected_burn_block_height);
+    assert!(ready_response.is_fully_synced);
+    assert!(!ready_response.server_version.is_empty());
 }
 
 #[test]
-fn test_get_health_returns_syncing_when_ibd() {
+fn test_get_ready_returns_service_unavailable_when_syncing() {
     let mut rpc_test = TestRPC::setup(function_name!());
     rpc_test.peer_2.refresh_burnchain_view();
     let expected_stacks_tip_height = rpc_test.peer_2.network.stacks_tip.height;
     let expected_burn_block_height = rpc_test.peer_2.network.chain_view.burn_block_height;
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 33333);
-    let request = StacksHttpRequest::new_gethealth(addr.into());
+    let request = StacksHttpRequest::new_getready(addr.into());
     let (http_resp_preamble, response_json_val) =
         run_json_request_with_ibd(rpc_test, request, true);
 
-    assert_eq!(http_resp_preamble.status_code, 200, "Expected HTTP 200 OK");
-    let health_response: RPCGetHealthResponse = serde_json::from_value(response_json_val).unwrap();
+    assert_eq!(
+        http_resp_preamble.status_code, 503,
+        "Expected HTTP 503 Service Unavailable"
+    );
+    let ready_response: RPCGetHealthResponse = serde_json::from_value(response_json_val).unwrap();
 
-    assert_eq!(
-        health_response.status,
-        RPCNodeStatus::Syncing,
-        "Expected a syncing node status"
-    );
-    assert_eq!(
-        health_response.stacks_tip_height,
-        expected_stacks_tip_height
-    );
-    assert_eq!(
-        health_response.burn_block_height,
-        expected_burn_block_height
-    );
-    assert!(!health_response.is_fully_synced);
-    assert!(!health_response.server_version.is_empty());
+    assert_eq!(ready_response.status, RPCNodeStatus::Syncing);
+    assert_eq!(ready_response.stacks_tip_height, expected_stacks_tip_height);
+    assert_eq!(ready_response.burn_block_height, expected_burn_block_height);
+    assert!(!ready_response.is_fully_synced);
+    assert!(!ready_response.server_version.is_empty());
 }
