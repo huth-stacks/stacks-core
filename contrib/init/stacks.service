@@ -21,7 +21,8 @@ ExecStartPre=/bin/chgrp stacks /etc/stacks-blockchain/
 # Process management
 ####################
 PIDFile=/run/stacks-blockchain/stacks-blockchain.pid
-Restart=no
+Restart=on-failure
+RestartSec=30
 TimeoutStopSec=600
 KillSignal=SIGINT
 SendSIGKILL=no
