@@ -2090,7 +2090,12 @@ impl ConversationP2P {
         preamble: &Preamble,
         relayers: Vec<RelayData>,
     ) -> Result<Option<ReplyHandleP2P>, net_error> {
-        assert!(preamble.payload_len > 5); // don't count 1-byte type prefix + 4 byte vector length
+        if preamble.payload_len <= 5 {
+            return Err(net_error::DeserializeError(format!(
+                "Blocks push payload len is too small: {}",
+                preamble.payload_len
+            )));
+        }
 
         let local_peer = network.get_local_peer();
         let chain_view = network.get_chain_view();
@@ -2130,7 +2135,12 @@ impl ConversationP2P {
         preamble: &Preamble,
         relayers: Vec<RelayData>,
     ) -> Result<Option<ReplyHandleP2P>, net_error> {
-        assert!(preamble.payload_len > 5); // don't count 1-byte type prefix + 4 byte vector length
+        if preamble.payload_len <= 5 {
+            return Err(net_error::DeserializeError(format!(
+                "Microblocks push payload len is too small: {}",
+                preamble.payload_len
+            )));
+        }
 
         let local_peer = network.get_local_peer();
         let chain_view = network.get_chain_view();
@@ -2167,7 +2177,12 @@ impl ConversationP2P {
         preamble: &Preamble,
         relayers: Vec<RelayData>,
     ) -> Result<Option<ReplyHandleP2P>, net_error> {
-        assert!(preamble.payload_len > 1); // don't count 1-byte type prefix
+        if preamble.payload_len <= 1 {
+            return Err(net_error::DeserializeError(format!(
+                "Transaction push payload len is too small: {}",
+                preamble.payload_len
+            )));
+        }
 
         let local_peer = network.get_local_peer();
         let chain_view = network.get_chain_view();
@@ -2205,7 +2220,12 @@ impl ConversationP2P {
         preamble: &Preamble,
         relayers: Vec<RelayData>,
     ) -> Result<Option<ReplyHandleP2P>, net_error> {
-        assert!(preamble.payload_len > 1); // don't count 1-byte type prefix
+        if preamble.payload_len <= 1 {
+            return Err(net_error::DeserializeError(format!(
+                "StackerDB push payload len is too small: {}",
+                preamble.payload_len
+            )));
+        }
 
         let local_peer = network.get_local_peer();
         let chain_view = network.get_chain_view();
@@ -2244,7 +2264,12 @@ impl ConversationP2P {
         preamble: &Preamble,
         relayers: Vec<RelayData>,
     ) -> Result<Option<ReplyHandleP2P>, net_error> {
-        assert!(preamble.payload_len > 1); // don't count 1-byte type prefix
+        if preamble.payload_len <= 1 {
+            return Err(net_error::DeserializeError(format!(
+                "Nakamoto blocks push payload len is too small: {}",
+                preamble.payload_len
+            )));
+        }
 
         let local_peer = network.get_local_peer();
         let chain_view = network.get_chain_view();
@@ -6949,6 +6974,21 @@ mod test {
 
         // NOTE: payload can be anything since we only look at premable length here
         let payload = StacksMessageType::Nack(NackData { error_code: 123 });
+        let mut short_msg = convo_1
+            .sign_relay_message(&local_peer_1, &chain_view, vec![], payload)
+            .unwrap();
+
+        short_msg.preamble.payload_len = 5;
+
+        let fail = convo_1
+            .validate_blocks_push(&net_1, &short_msg.preamble, short_msg.relayers.clone())
+            .unwrap_err();
+        assert!(
+            matches!(fail, net_error::DeserializeError(_)),
+            "Wrong error {fail:?}"
+        );
+
+        let payload = StacksMessageType::Nack(NackData { error_code: 123 });
 
         // bad message -- got bad relayers (cycle)
         let bad_relayers = vec![
@@ -7075,6 +7115,21 @@ mod test {
         );
 
         // NOTE: payload can be anything since we only look at premable length here
+        let payload = StacksMessageType::Nack(NackData { error_code: 123 });
+        let mut short_msg = convo_1
+            .sign_relay_message(&local_peer_1, &chain_view, vec![], payload)
+            .unwrap();
+
+        short_msg.preamble.payload_len = 1;
+
+        let fail = convo_1
+            .validate_transaction_push(&net_1, &short_msg.preamble, short_msg.relayers.clone())
+            .unwrap_err();
+        assert!(
+            matches!(fail, net_error::DeserializeError(_)),
+            "Wrong error {fail:?}"
+        );
+
         let payload = StacksMessageType::Nack(NackData { error_code: 123 });
 
         // bad message -- got bad relayers (cycle)
@@ -7203,6 +7258,21 @@ mod test {
 
         // NOTE: payload can be anything since we only look at premable length here
         let payload = StacksMessageType::Nack(NackData { error_code: 123 });
+        let mut short_msg = convo_1
+            .sign_relay_message(&local_peer_1, &chain_view, vec![], payload)
+            .unwrap();
+
+        short_msg.preamble.payload_len = 5;
+
+        let fail = convo_1
+            .validate_microblocks_push(&net_1, &short_msg.preamble, short_msg.relayers.clone())
+            .unwrap_err();
+        assert!(
+            matches!(fail, net_error::DeserializeError(_)),
+            "Wrong error {fail:?}"
+        );
+
+        let payload = StacksMessageType::Nack(NackData { error_code: 123 });
 
         // bad message -- got bad relayers (cycle)
         let bad_relayers = vec![
@@ -7330,6 +7400,21 @@ mod test {
 
         // NOTE: payload can be anything since we only look at premable length here
         let payload = StacksMessageType::Nack(NackData { error_code: 123 });
+        let mut short_msg = convo_1
+            .sign_relay_message(&local_peer_1, &chain_view, vec![], payload)
+            .unwrap();
+
+        short_msg.preamble.payload_len = 1;
+
+        let fail = convo_1
+            .validate_stackerdb_push(&net_1, &short_msg.preamble, short_msg.relayers.clone())
+            .unwrap_err();
+        assert!(
+            matches!(fail, net_error::DeserializeError(_)),
+            "Wrong error {fail:?}"
+        );
+
+        let payload = StacksMessageType::Nack(NackData { error_code: 123 });
 
         // bad message -- got bad relayers (cycle)
         let bad_relayers = vec![
@@ -7394,5 +7479,81 @@ mod test {
             .unwrap()
             .is_some());
         assert_eq!(convo_1.stats.msgs_err, err_before);
+    }
+
+    #[test]
+    fn test_validate_nakamoto_block_push_invalid_payload_len() {
+        let mut conn_opts = ConnectionOptions::default();
+        conn_opts.max_nakamoto_block_push_bandwidth = 100;
+
+        let socketaddr_1 = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)), 8081);
+
+        let first_burn_hash = BurnchainHeaderHash::from_hex(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
+
+        let mut chain_view = BurnchainView {
+            burn_block_height: 12348,
+            burn_block_hash: BurnchainHeaderHash([0x11; 32]),
+            burn_stable_block_height: 12341,
+            burn_stable_block_hash: BurnchainHeaderHash([0x22; 32]),
+            last_burn_block_hashes: HashMap::new(),
+            rc_consensus_hash: ConsensusHash([0x33; 20]),
+        };
+        chain_view.make_test_data();
+
+        let test_name_1 = "validate_nakamoto_block_push_invalid_payload_len_1";
+        let burnchain = testing_burnchain_config(test_name_1);
+
+        let (mut peerdb_1, mut sortdb_1, stackerdbs_1, pox_id_1, _) = make_test_chain_dbs(
+            test_name_1,
+            &burnchain,
+            0x9abcdef0,
+            12352,
+            "http://peer1.com".into(),
+            &[],
+            &[],
+            DEFAULT_SERVICES,
+        );
+
+        let net_1 = db_setup(
+            test_name_1,
+            &burnchain,
+            0x9abcdef0,
+            &mut peerdb_1,
+            &mut sortdb_1,
+            &socketaddr_1,
+            &chain_view,
+        );
+
+        let local_peer_1 = PeerDB::get_local_peer(peerdb_1.conn()).unwrap();
+
+        let mut convo_1 = ConversationP2P::new(
+            123,
+            456,
+            &burnchain,
+            &socketaddr_1,
+            &conn_opts,
+            true,
+            0,
+            StacksEpoch::unit_test_pre_2_05(0),
+        );
+
+        // NOTE: payload can be anything since we only look at premable length here
+        let payload = StacksMessageType::Nack(NackData { error_code: 123 });
+        let mut short_msg = convo_1
+            .sign_relay_message(&local_peer_1, &chain_view, vec![], payload)
+            .unwrap();
+
+        short_msg.preamble.payload_len = 1;
+
+        let fail = convo_1
+            .validate_nakamoto_block_push(&net_1, &short_msg.preamble, short_msg.relayers.clone())
+            .unwrap_err();
+        assert!(
+            matches!(fail, net_error::DeserializeError(_)),
+            "Wrong error {fail:?}"
+        );
     }
 }
