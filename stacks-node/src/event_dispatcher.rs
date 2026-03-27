@@ -1298,8 +1298,7 @@ impl EventDispatcher {
     ) {
         let http_result = Self::make_http_request(data, disable_retries);
 
-        if let Err(err) = http_result {
-            // log but continue
+        if let Err(ref err) = http_result {
             error!("EventDispatcher: dispatching failed"; "url" => data.url.clone(), "error" => ?err);
         }
 
@@ -1309,11 +1308,17 @@ impl EventDispatcher {
             return;
         }
 
-        // We're deleting regardless of result -- if retries are disabled, that means
-        // we're supposed to forget about it in case of failure. If they're not disabled,
-        // then we wouldn't be here in case of failue, because `make_http_request` retries
-        // until it's successful (with the exception of the above fault injection which
-        // simulates a shutdown).
+        // Only delete if the request succeeded or if retries are disabled (fire-and-forget mode).
+        // If make_http_request exhausted retries, keep the event in the DB so
+        // retry_pending_payloads can pick it up on restart.
+        if http_result.is_err() && !disable_retries {
+            warn!(
+                "Event dispatcher: keeping event in DB for retry on restart";
+                "url" => &data.url
+            );
+            return;
+        }
+
         let deletion_result = self.delete_from_db(id);
 
         if let Err(e) = deletion_result {
