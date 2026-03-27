@@ -2544,14 +2544,17 @@ impl NodeConfig {
                     if let Some(addr) = addrs.next() {
                         break addr;
                     } else {
-                        error!("No addresses found for bootstrap node '{hostport}', skipping");
+                        error!("No addresses found for bootstrap node, skipping"; "host" => hostport);
                         return;
                     }
                 }
                 Err(e) => {
                     if attempts >= max_attempts {
                         error!(
-                            "Failed to resolve bootstrap node '{hostport}' after {max_attempts} attempts: {e}, skipping"
+                            "Failed to resolve bootstrap node, skipping";
+                            "host" => hostport,
+                            "attempts" => max_attempts,
+                            "error" => %e
                         );
                         return;
                     } else {
@@ -2589,12 +2592,12 @@ impl NodeConfig {
             Ok(mut addrs) => match addrs.next() {
                 Some(addr) => addr,
                 None => {
-                    error!("No addresses found for deny node '{deny_node}', skipping");
+                    error!("No addresses found for deny node, skipping"; "node" => deny_node);
                     return;
                 }
             },
             Err(e) => {
-                error!("Failed to resolve deny node '{deny_node}': {e}, skipping");
+                error!("Failed to resolve deny node, skipping"; "node" => deny_node, "error" => %e);
                 return;
             }
         };
