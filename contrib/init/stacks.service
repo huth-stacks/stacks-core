@@ -3,8 +3,10 @@
 [Unit]
 Description=Stacks Blockchain
 # https://www.freedesktop.org/wiki/Software/systemd/NetworkTarget/
-After=network-online.target
+After=network-online.target bitcoind.service
 Wants=network-online.target
+# If bitcoind is installed as a systemd service, ensure it starts first.
+# This is a soft dependency — stacks-node will start even without bitcoind.service.
 
 ConditionFileIsExecutable=/usr/local/bin/stacks-node
 ConditionPathExists=/etc/stacks-blockchain/Config.toml
