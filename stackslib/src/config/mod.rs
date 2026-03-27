@@ -2544,12 +2544,16 @@ impl NodeConfig {
                     if let Some(addr) = addrs.next() {
                         break addr;
                     } else {
-                        panic!("No addresses found for '{hostport}'");
+                        error!("No addresses found for bootstrap node '{hostport}', skipping");
+                        return;
                     }
                 }
                 Err(e) => {
                     if attempts >= max_attempts {
-                        panic!("Failed to resolve '{hostport}' after {max_attempts} attempts: {e}");
+                        error!(
+                            "Failed to resolve bootstrap node '{hostport}' after {max_attempts} attempts: {e}, skipping"
+                        );
+                        return;
                     } else {
                         error!(
                             "Attempt {} - Failed to resolve '{hostport}': {e}. Retrying in {delay:?}...",
