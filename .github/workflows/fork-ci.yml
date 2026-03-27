@@ -1,0 +1,116 @@
+## Lean CI for the stacks-core fork
+## Runs fmt, clippy, and a build check on every push to fork/ branches
+name: Fork CI
+
+on:
+  push:
+    branches:
+      - 'fork/**'
+  pull_request:
+    branches:
+      - 'fork/**'
+
+concurrency:
+  group: fork-ci-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  rustfmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt-stacks --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Clippy (all crates except stackslib)
+        run: cargo clippy-stacks
+
+      - name: Clippy (stackslib)
+        run: cargo clippy-stackslib
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --features monitoring_prom,slog_json --release
+        env:
+          CARGO_INCREMENTAL: 0
+
+      - name: Report binary size
+        run: |
+          ls -lh target/release/stacks-node
+          ls -lh target/release/stacks-signer
+
+  test-quick:
+    name: Quick Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: Run tests (quick, non-ignored)
+        run: cargo nextest run --workspace --exclude stacks-node -j 4
+        timeout-minutes: 30
+        env:
+          RUST_BACKTRACE: 1
