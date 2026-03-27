@@ -265,6 +265,34 @@ fn cli_get_miner_spend(
     spend_amount
 }
 
+/// Check the process file descriptor limit and warn if too low.
+#[cfg(unix)]
+fn check_fd_limit() {
+    use libc::{getrlimit, rlimit, RLIMIT_NOFILE};
+    let mut rlim = rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    let ret = unsafe { getrlimit(RLIMIT_NOFILE, &mut rlim) };
+    if ret == 0 {
+        if rlim.rlim_cur < 1024 {
+            error!(
+                "File descriptor limit is very low, node may crash under load";
+                "soft_limit" => rlim.rlim_cur,
+                "hard_limit" => rlim.rlim_max,
+                "recommended" => 524288_u64,
+                "fix" => "Add LimitNOFILE=524288 to systemd unit or run: ulimit -n 524288"
+            );
+        } else if rlim.rlim_cur < 65536 {
+            warn!(
+                "File descriptor limit is below recommended value";
+                "soft_limit" => rlim.rlim_cur,
+                "recommended" => 524288_u64
+            );
+        }
+    }
+}
+
 fn main() {
     panic::set_hook(Box::new(|panic_info| {
         error!("Process abort due to thread panic: {panic_info}");
@@ -286,6 +314,9 @@ fn main() {
         // just in case
         process::exit(1);
     }));
+
+    #[cfg(unix)]
+    check_fd_limit();
 
     let mut args = Arguments::from_env();
     let subcommand = args.subcommand().unwrap().unwrap_or_default();
