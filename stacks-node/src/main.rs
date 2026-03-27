@@ -10,6 +10,8 @@ extern crate stacks;
 #[macro_use(o, slog_log, slog_trace, slog_debug, slog_info, slog_warn, slog_error)]
 extern crate slog;
 
+use std::net::ToSocketAddrs;
+
 pub use stacks_common::util;
 use stacks_common::util::hash::hex_bytes;
 
@@ -332,8 +334,46 @@ fn main() {
                 }
             };
             match Config::from_config_file(config_file, true) {
-                Ok(_) => {
-                    info!("Loaded config!");
+                Ok(config) => {
+                    info!("Config file: valid");
+
+                    // Check working directory
+                    let working_dir = &config.node.working_dir;
+                    if std::path::Path::new(working_dir).exists() {
+                        info!("Working directory: exists"; "path" => working_dir);
+                    } else {
+                        warn!("Working directory does not exist"; "path" => working_dir);
+                    }
+
+                    // Check Bitcoin RPC connectivity
+                    let btc_host = &config.burnchain.peer_host;
+                    let btc_port = config.burnchain.rpc_port;
+                    let btc_addr = format!("{btc_host}:{btc_port}");
+                    match btc_addr.to_socket_addrs() {
+                        Ok(mut addrs) => {
+                            if let Some(addr) = addrs.next() {
+                                match std::net::TcpStream::connect_timeout(
+                                    &addr,
+                                    std::time::Duration::from_secs(5),
+                                ) {
+                                    Ok(_) => info!("Bitcoin RPC: reachable"; "host" => btc_host, "port" => btc_port),
+                                    Err(e) => warn!("Bitcoin RPC: unreachable"; "host" => btc_host, "port" => btc_port, "error" => %e),
+                                }
+                            } else {
+                                warn!("Bitcoin RPC: no addresses found"; "host" => btc_host, "port" => btc_port);
+                            }
+                        }
+                        Err(e) => warn!("Bitcoin RPC: cannot resolve host"; "host" => btc_host, "port" => btc_port, "error" => %e),
+                    }
+
+                    // Check RPC port availability
+                    let rpc_bind = &config.node.rpc_bind;
+                    match std::net::TcpListener::bind(rpc_bind) {
+                        Ok(_) => info!("RPC port: available"; "bind" => rpc_bind),
+                        Err(e) => warn!("RPC port: in use or unavailable"; "bind" => rpc_bind, "error" => %e),
+                    }
+
+                    info!("Config check complete");
                     process::exit(0);
                 }
                 Err(e) => {
