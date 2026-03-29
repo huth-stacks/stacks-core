@@ -1894,6 +1894,14 @@ impl<T: MarfTrieId> TrieFileStorage<T> {
             panic!("PARTIAL MIGRATION DETECTED! This is an irrecoverable error. You will need to restart your node from genesis.");
         }
 
+        // Clear stale block extension locks from prior unclean shutdown (kill -9, OOM, power loss).
+        // These locks are only held within a single transaction that commits atomically, so any
+        // locks present on startup are orphaned. Without this cleanup, the node crash-loops with
+        // "failed to advance chain tip: DBError(IndexError(ExistsError))".
+        if !readonly {
+            trie_sql::clear_lock_data(&db)?;
+        }
+
         debug!(
             "Opened TrieFileStorage {}; external blobs: {}",
             db_path,
