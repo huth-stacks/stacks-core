@@ -419,10 +419,10 @@ impl<T: SignerEventTrait> EventReceiver<T> for SignerEventReceiver<T> {
                 process_event::<T, StacksBlockEvent>(request)
             } else {
                 let url = request.url().to_string();
-                debug!(
-                    "[{:?}] next_event got request with unexpected url {}, return OK so other side doesn't keep sending this",
-                    event_receiver.local_addr,
-                    url
+                warn!(
+                    "next_event got request with unexpected url, return OK so other side doesn't keep sending this";
+                    "local_addr" => ?event_receiver.local_addr,
+                    "path" => %url
                 );
                 ack_dispatcher(request);
                 Err(EventError::UnrecognizedEvent(url))

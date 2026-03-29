@@ -525,6 +525,10 @@ impl SortitionsView {
         let last_sortition = last_sortition
             .map(SortitionState::try_from)
             .transpose()
+            .map_err(|e| {
+                warn!("Failed to parse last sortition; ignoring"; "err" => %e);
+                e
+            })
             .ok()
             .flatten();
 
@@ -546,6 +550,10 @@ impl SortitionsView {
         let last_sortition = last_sortition
             .map(SortitionState::try_from)
             .transpose()
+            .map_err(|e| {
+                warn!("Failed to parse last sortition; ignoring"; "err" => %e);
+                e
+            })
             .ok()
             .flatten();
 

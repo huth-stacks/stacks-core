@@ -534,10 +534,12 @@ impl TryFrom<RawConfigFile> for GlobalConfig {
             Some(endpoint) => Some(
                 endpoint
                     .to_socket_addrs()
-                    .map_err(|_| ConfigError::BadField("endpoint".to_string(), endpoint.clone()))?
+                    .map_err(|_| {
+                        ConfigError::BadField("metrics_endpoint".to_string(), endpoint.clone())
+                    })?
                     .next()
                     .ok_or_else(|| {
-                        ConfigError::BadField("endpoint".to_string(), endpoint.clone())
+                        ConfigError::BadField("metrics_endpoint".to_string(), endpoint.clone())
                     })?,
             ),
             None => None,
