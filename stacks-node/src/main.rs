@@ -288,6 +288,12 @@ fn main() {
     }));
 
     let mut args = Arguments::from_env();
+
+    if args.contains("--version") || args.contains("-V") {
+        println!("{}", version());
+        return;
+    }
+
     let subcommand = args.subcommand().unwrap().unwrap_or_default();
 
     info!("{}", version());
