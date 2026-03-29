@@ -2585,6 +2585,9 @@ impl NodeConfig {
                 self.add_bootstrap_node(part, chain_id, peer_version);
             }
         }
+        if self.bootstrap_node.is_empty() {
+            warn!("No bootstrap nodes resolved — node may not find peers. Check DNS and network connectivity.");
+        }
     }
 
     pub fn add_deny_node(&mut self, deny_node: &str, chain_id: u32, peer_version: u32) {
@@ -2597,7 +2600,7 @@ impl NodeConfig {
                 }
             },
             Err(e) => {
-                error!("Failed to resolve deny node, skipping"; "node" => deny_node, "error" => %e);
+                warn!("Deny node DNS failed — connections from this peer will NOT be blocked"; "node" => deny_node, "error" => %e);
                 return;
             }
         };
