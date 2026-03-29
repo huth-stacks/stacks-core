@@ -28,8 +28,8 @@ use stacks_common::util::secp256k1::MessageSignature;
 use crate::net::stackerdb::{StackerDBConfig, StackerDBTx, StackerDBs, STACKERDB_INV_MAX};
 use crate::net::{Error as net_error, StackerDBChunkData};
 use crate::util_lib::db::{
-    query_row, query_rows, sqlite_open, tx_begin_immediate, u64_to_sql, DBConn, Error as db_error,
-    FromColumn, FromRow,
+    query_row, query_rows, sqlite_apply_connection_tuning, sqlite_open, tx_begin_immediate,
+    u64_to_sql, DBConn, Error as db_error, FromColumn, FromRow,
 };
 
 const STACKER_DB_SCHEMA: &[&str] = &[
@@ -470,6 +470,7 @@ impl StackerDBs {
         };
 
         let conn = sqlite_open(path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
         let mut db = StackerDBs {
             conn,
             path: path.to_string(),

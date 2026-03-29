@@ -31,7 +31,8 @@ use crate::chainstate::burn::BlockSnapshot;
 use crate::chainstate::stacks::index::ClarityMarfTrieId;
 use crate::core::StacksEpochId;
 use crate::util_lib::db::{
-    opt_u64_to_sql, query_row, query_row_panic, query_rows, sqlite_open, table_exists,
+    opt_u64_to_sql, query_row, query_row_panic, query_rows, sqlite_apply_connection_tuning,
+    sqlite_open, table_exists,
     tx_begin_immediate, u64_to_sql, DBConn, Error as DBError, FromColumn, FromRow,
 };
 
@@ -554,6 +555,7 @@ impl BurnchainDB {
         };
 
         let conn = sqlite_open(path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
         debug!("Burnchain DB instantiated at {path}.");
         let mut burnchain_db = Self { conn };
         burnchain_db.create_or_migrate(burnchain, readwrite, create_flag)?;
@@ -686,6 +688,7 @@ impl BurnchainDB {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         };
         let conn = sqlite_open(path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
         let mut db = BurnchainDB { conn };
 
         if readwrite || path == ":memory:" {

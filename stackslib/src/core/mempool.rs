@@ -63,7 +63,8 @@ use crate::net::api::postblock_proposal::{BlockValidateOk, BlockValidateReject};
 use crate::net::Error as net_error;
 use crate::util_lib::bloom::{BloomCounter, BloomFilter, BloomNodeHasher};
 use crate::util_lib::db::{
-    query_int, query_row, query_row_columns, query_rows, sqlite_open, table_exists,
+    query_int, query_row, query_row_columns, query_rows, sqlite_apply_connection_tuning,
+    sqlite_open, table_exists,
     tx_begin_immediate, u64_to_sql, DBConn, DBTx, Error as db_error, Error, FromColumn, FromRow,
 };
 use crate::{cost_estimates, monitoring};
@@ -1375,6 +1376,7 @@ impl MemPoolDB {
         };
 
         let mut conn = sqlite_open(&db_path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
         if create_flag {
             // instantiate!
             MemPoolDB::instantiate_mempool_db(&mut conn)?;
@@ -1413,6 +1415,7 @@ impl MemPoolDB {
         };
 
         let conn = sqlite_open(&self.path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
         Ok(conn)
     }
 

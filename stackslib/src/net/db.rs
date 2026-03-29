@@ -36,8 +36,8 @@ use crate::core::NETWORK_P2P_PORT;
 use crate::net::asn::ASEntry4;
 use crate::net::{Neighbor, NeighborAddress, NeighborKey, ServiceFlags};
 use crate::util_lib::db::{
-    query_count, query_row, query_row_panic, query_rows, sqlite_open, tx_begin_immediate,
-    u64_to_sql, DBConn, Error as db_error, FromColumn, FromRow,
+    query_count, query_row, query_row_panic, query_rows, sqlite_apply_connection_tuning,
+    sqlite_open, tx_begin_immediate, u64_to_sql, DBConn, Error as db_error, FromColumn, FromRow,
 };
 use crate::util_lib::strings::UrlString;
 
@@ -646,6 +646,7 @@ impl PeerDB {
         };
 
         let conn = sqlite_open(path, open_flags, false)?;
+        sqlite_apply_connection_tuning(&conn)?;
 
         let mut db = PeerDB { conn, readwrite };
 
@@ -728,6 +729,7 @@ impl PeerDB {
         };
 
         let conn = sqlite_open(path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
 
         let db = PeerDB { conn, readwrite };
         Ok(db)
@@ -745,6 +747,7 @@ impl PeerDB {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         };
         let conn = sqlite_open(path, open_flags, true)?;
+        sqlite_apply_connection_tuning(&conn)?;
 
         let db = PeerDB { conn, readwrite };
 
