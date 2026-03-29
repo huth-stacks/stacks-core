@@ -132,7 +132,9 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
         );
         let (res_send, res_recv) = channel();
         let ev = SignerEventReceiver::new(config.network.is_mainnet());
-        crate::monitoring::actions::start_serving_monitoring_metrics(config.clone()).ok();
+        if let Err(e) = crate::monitoring::actions::start_serving_monitoring_metrics(config.clone()) {
+            warn!("Failed to start monitoring metrics server: {e}. Signer will run without metrics.");
+        }
         let runloop = RunLoop::new(config.clone());
         let mut signer: RunLoopSigner<S, T> = libsigner::Signer::new(runloop, ev, res_send);
         let running_signer = signer.spawn(endpoint).expect("Failed to spawn signer");

@@ -273,6 +273,9 @@ impl<Signer: SignerTrait<T>, T: StacksMessageCodec + Clone + Send + Debug> RunLo
             })?;
 
         let dry_run = self.config.dry_run;
+        if dry_run {
+            warn!("DRY RUN MODE ENABLED — signer will NOT submit signatures or participate in consensus. Set dry_run = false in config to sign blocks.");
+        }
         let current_addr = self.stacks_client.get_signer_address();
 
         let signer_config_mode = if !dry_run {

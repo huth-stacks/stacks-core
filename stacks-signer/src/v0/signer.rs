@@ -525,12 +525,11 @@ impl Signer {
                 for (_slot_id, signer_public_key, message) in messages {
                     let signer_address = StacksAddress::p2pkh(self.mainnet, signer_public_key);
                     if !self.is_valid_signer(&signer_address) {
-                        debug!("{self}: Received a message from an unknown signer. Ignoring...";
+                        warn!("{self}: Received a message from an unknown signer, skipping this message";
                             "signer_public_key" => ?signer_public_key,
                             "signer_address" => %signer_address,
-                            "message" => ?message,
                         );
-                        return;
+                        continue;
                     }
                     match message {
                         SignerMessage::BlockResponse(block_response) => {
@@ -559,7 +558,9 @@ impl Signer {
                                 signer_signature_hash,
                             )
                         }
-                        _ => {}
+                        other => {
+                            debug!("{self}: Ignoring unhandled signer message type"; "message" => ?other);
+                        }
                     }
                 }
             }
@@ -614,7 +615,9 @@ impl Signer {
                                 self.mock_sign(mock_proposal.clone());
                             }
                         }
-                        _ => {}
+                        other => {
+                            debug!("{self}: Ignoring unhandled miner message type"; "message" => ?other);
+                        }
                     }
                 }
             }
