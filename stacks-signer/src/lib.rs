@@ -53,7 +53,8 @@ use config::GlobalConfig;
 use libsigner::{SignerEvent, SignerEventReceiver, SignerEventTrait, VERSION_STRING};
 use runloop::SignerResult;
 use signerdb::BlockInfo;
-use stacks_common::{info, warn};
+use stacks_common::consts::{CHAIN_ID_MAINNET, CHAIN_ID_TESTNET};
+use stacks_common::{error, info, warn};
 use v0::signer_state::LocalStateMachine;
 
 use crate::client::StacksClient;
@@ -137,6 +138,18 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
         }
         let runloop = RunLoop::new(config.clone());
         runloop.stacks_client.validate_auth_password();
+        match runloop.stacks_client.get_peer_info() {
+            Ok(peer_info) if peer_info.network_id != config.to_chain_id() => {
+                let node_network = match peer_info.network_id {
+                    CHAIN_ID_MAINNET => "mainnet".to_string(),
+                    CHAIN_ID_TESTNET => "testnet/mocknet".to_string(),
+                    network_id => format!("unknown ({network_id:#x})"),
+                };
+                error!("NETWORK MISMATCH: signer configured for {} but node is running {}. Blocks will not be validated correctly.", config.network, node_network);
+            }
+            Ok(_) => {}
+            Err(_) => warn!("Cannot reach stacks node at startup. Signer will retry when events arrive."; "node_host" => %config.node_host),
+        }
         let mut signer: RunLoopSigner<S, T> = libsigner::Signer::new(runloop, ev, res_send);
         let running_signer = signer.spawn(endpoint).expect("Failed to spawn signer");
         SpawnedSigner {
