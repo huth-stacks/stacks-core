@@ -39,8 +39,8 @@ use crate::chainstate::stacks::index::{Error as MARFError, MARFValue, MarfTrieId
 pub type DBConn = rusqlite::Connection;
 pub type DBTx<'a> = rusqlite::Transaction<'a>;
 
-// 1GB for MARF databases (state trie lookups benefit from larger mmap)
-pub const SQLITE_MMAP_SIZE: i64 = 1024 * 1024 * 1024;
+// 256MB (same as upstream — MARF mmap for state trie lookups)
+pub const SQLITE_MMAP_SIZE: i64 = 256 * 1024 * 1024;
 
 // 32K
 pub const SQLITE_MARF_PAGE_SIZE: i64 = 32768;
