@@ -1,0 +1,13 @@
+# Logrotate configuration for stacks-node
+# Install: cp contrib/init/stacks-logrotate /etc/logrotate.d/stacks-node
+
+/var/log/stacks-node/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    maxsize 500M
+}
