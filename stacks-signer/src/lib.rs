@@ -136,6 +136,9 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
             warn!("Failed to start monitoring metrics server: {e}. Signer will run without metrics.");
         }
         let runloop = RunLoop::new(config.clone());
+        if config.dry_run {
+            warn!("Dry run mode enabled: signer will not submit signatures or participate in consensus. Set dry_run = false in config to sign blocks.");
+        }
         // Preflight checks: warn about misconfigurations before spawning.
         // Uses a short timeout so slow/unreachable nodes don't block startup.
         {
@@ -146,23 +149,23 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
                 .ok();
             if let Some(client) = preflight_client {
                 // Auth check
-                let auth_url = format!("{}/v2/block_proposal", config.node_host);
+                let auth_url = format!("http://{}/v3/block_proposal", config.node_host);
                 match client.post(&auth_url)
                     .header("Authorization", &config.auth_password)
                     .send() {
                     Ok(resp) if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 => {
-                        error!("auth_password does not match the node's auth_token — check your signer and node configs");
+                        error!("auth_password does not match the node's auth_token -- check your signer and node configs");
                     }
-                    _ => {} // Connection failure or success — both fine at startup
+                    _ => {} // Connection failure or success -- both fine at startup
                 }
                 // Network mismatch check
-                let info_url = format!("{}/v2/info", config.node_host);
+                let info_url = format!("http://{}/v2/info", config.node_host);
                 match client.get(&info_url).send().and_then(|r| r.json::<serde_json::Value>()) {
                     Ok(info) => {
                         if let Some(network_id) = info.get("network_id").and_then(|v| v.as_u64()) {
                             let expected = config.to_chain_id() as u64;
                             if network_id != expected {
-                                error!("NETWORK MISMATCH: signer expects network_id {expected} but node reports {network_id}. Check network configuration.");
+                                error!("Network mismatch: signer expects network_id {expected} but node reports {network_id}. Check network configuration.");
                             }
                         }
                     }
