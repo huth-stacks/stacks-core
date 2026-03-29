@@ -212,8 +212,10 @@ impl SignerTrait<SignerMessage> for Signer {
 
         debug!("Reward cycle #{} {mode}", signer_config.reward_cycle);
 
-        let mut signer_db =
-            SignerDb::new(&signer_config.db_path).expect("Failed to connect to signer Db");
+        let mut signer_db = SignerDb::new(&signer_config.db_path).expect(&format!(
+            "failed to connect to signer Db at {}",
+            signer_config.db_path.display()
+        ));
         let proposal_config = ProposalEvalConfig::from(&signer_config);
 
         let stacks_address = StacksAddress::p2pkh(

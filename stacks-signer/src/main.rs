@@ -127,7 +127,8 @@ fn handle_generate_stacking_signature(
     args: GenerateStackingSignatureArgs,
     do_print: bool,
 ) -> MessageSignature {
-    let config = GlobalConfig::try_from(&args.config).unwrap();
+    let config = GlobalConfig::try_from(&args.config)
+        .expect(&format!("failed to load signer config from {}", args.config.display()));
 
     let private_key = config.stacks_private_key.clone();
     let public_key = StacksPublicKey::from_private(&private_key);
@@ -179,7 +180,8 @@ fn handle_check_config(args: RunSignerArgs) {
 }
 
 fn handle_generate_vote(args: GenerateVoteArgs, do_print: bool) -> MessageSignature {
-    let config = GlobalConfig::try_from(&args.config).unwrap();
+    let config = GlobalConfig::try_from(&args.config)
+        .expect(&format!("failed to load signer config from {}", args.config.display()));
     let message_signature = args.vote_info.sign(&config.stacks_private_key).unwrap();
     if do_print {
         println!("{}", to_hex(message_signature.as_bytes()));

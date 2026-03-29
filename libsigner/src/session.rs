@@ -244,8 +244,8 @@ impl SignerSession for StackerDBSession {
                     if body_bytes.len() > limit {
                         warn!(
                             "Ignoring oversized StackerDB chunk";
-                            "slot_id" => slot_id,
-                            "err" => %format_args!(
+                            "slot_id" => *slot_id,
+                            "err" => format!(
                                 "chunk size {} exceeds limit {}",
                                 body_bytes.len(),
                                 limit

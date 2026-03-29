@@ -525,17 +525,14 @@ impl<T: SignerEventTrait> TryFrom<StackerDBChunksEvent> for SignerEvent<T> {
         {
             let mut messages = vec![];
             for chunk in event.modified_slots {
-                let Err(e) = T::consensus_deserialize(&mut chunk.data.as_slice()) else {
-                    let msg = T::consensus_deserialize(&mut chunk.data.as_slice()).unwrap();
-                    messages.push(msg);
-                    continue;
-                };
-                warn!(
-                    "Ignoring malformed miner chunk";
-                    "slot_id" => chunk.slot_id,
-                    "err" => %e
-                );
-                continue;
+                match T::consensus_deserialize(&mut chunk.data.as_slice()) {
+                    Ok(msg) => messages.push(msg),
+                    Err(e) => warn!(
+                        "Ignoring malformed miner chunk";
+                        "slot_id" => chunk.slot_id,
+                        "err" => %e
+                    ),
+                }
             }
             SignerEvent::MinerMessages(messages)
         } else if event.contract_id.name.starts_with(SIGNERS_NAME) && event.contract_id.is_boot() {

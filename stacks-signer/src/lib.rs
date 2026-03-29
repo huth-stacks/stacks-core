@@ -53,7 +53,6 @@ use config::GlobalConfig;
 use libsigner::{SignerEvent, SignerEventReceiver, SignerEventTrait, VERSION_STRING};
 use runloop::SignerResult;
 use signerdb::BlockInfo;
-use stacks_common::consts::{CHAIN_ID_MAINNET, CHAIN_ID_TESTNET};
 use stacks_common::{error, info, warn};
 use v0::signer_state::LocalStateMachine;
 
@@ -137,18 +136,39 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
             warn!("Failed to start monitoring metrics server: {e}. Signer will run without metrics.");
         }
         let runloop = RunLoop::new(config.clone());
-        runloop.stacks_client.validate_auth_password();
-        match runloop.stacks_client.get_peer_info() {
-            Ok(peer_info) if peer_info.network_id != config.to_chain_id() => {
-                let node_network = match peer_info.network_id {
-                    CHAIN_ID_MAINNET => "mainnet".to_string(),
-                    CHAIN_ID_TESTNET => "testnet/mocknet".to_string(),
-                    network_id => format!("unknown ({network_id:#x})"),
-                };
-                error!("NETWORK MISMATCH: signer configured for {} but node is running {}. Blocks will not be validated correctly.", config.network, node_network);
+        // Preflight checks: warn about misconfigurations before spawning.
+        // Uses a short timeout so slow/unreachable nodes don't block startup.
+        {
+            use std::time::Duration;
+            let preflight_client = reqwest::blocking::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .ok();
+            if let Some(client) = preflight_client {
+                // Auth check
+                let auth_url = format!("{}/v2/block_proposal", config.node_host);
+                match client.post(&auth_url)
+                    .header("Authorization", &config.auth_password)
+                    .send() {
+                    Ok(resp) if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 => {
+                        error!("auth_password does not match the node's auth_token — check your signer and node configs");
+                    }
+                    _ => {} // Connection failure or success — both fine at startup
+                }
+                // Network mismatch check
+                let info_url = format!("{}/v2/info", config.node_host);
+                match client.get(&info_url).send().and_then(|r| r.json::<serde_json::Value>()) {
+                    Ok(info) => {
+                        if let Some(network_id) = info.get("network_id").and_then(|v| v.as_u64()) {
+                            let expected = config.to_chain_id() as u64;
+                            if network_id != expected {
+                                error!("NETWORK MISMATCH: signer expects network_id {expected} but node reports {network_id}. Check network configuration.");
+                            }
+                        }
+                    }
+                    Err(_) => warn!("Cannot reach stacks node at startup (5s timeout). Signer will retry when events arrive."; "node_host" => %config.node_host),
+                }
             }
-            Ok(_) => {}
-            Err(_) => warn!("Cannot reach stacks node at startup. Signer will retry when events arrive."; "node_host" => %config.node_host),
         }
         let mut signer: RunLoopSigner<S, T> = libsigner::Signer::new(runloop, ev, res_send);
         let running_signer = signer.spawn(endpoint).expect("Failed to spawn signer");
