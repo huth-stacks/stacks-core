@@ -46,8 +46,8 @@ use stacks_common::util::hash::{to_hex, Hash160};
 use super::{AtlasConfig, Attachment, AttachmentInstance};
 use crate::burnchains::Txid;
 use crate::util_lib::db::{
-    query_count, query_row, query_rows, sqlite_open, tx_begin_immediate, u64_to_sql,
-    Error as db_error, FromColumn, FromRow,
+    query_count, query_row, query_rows, sqlite_apply_connection_tuning, sqlite_open,
+    tx_begin_immediate, u64_to_sql, Error as db_error, FromColumn, FromRow,
 };
 
 pub const ATLASDB_VERSION: &str = "2";
@@ -288,6 +288,7 @@ impl AtlasDB {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         };
         let conn = sqlite_open(path, open_flags, false)?;
+        sqlite_apply_connection_tuning(&conn)?;
         Self::check_instantiate_db(atlas_config, conn, readwrite, create_flag)
     }
 

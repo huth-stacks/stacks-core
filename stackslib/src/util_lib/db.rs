@@ -738,13 +738,21 @@ pub fn sqlite_open<P: AsRef<Path>>(
     db.busy_handler(Some(tx_busy_handler))?;
     inner_sql_pragma(&db, "journal_mode", &"WAL")?;
     inner_sql_pragma(&db, "synchronous", &"NORMAL")?;
-    inner_sql_pragma(&db, "mmap_size", &(256 * 1024 * 1024))?;
-    inner_sql_pragma(&db, "cache_size", &(-32000))?;
-    inner_sql_pragma(&db, "wal_autocheckpoint", &500)?;
     if foreign_keys {
         inner_sql_pragma(&db, "foreign_keys", &true)?;
     }
     Ok(db)
+}
+
+/// Apply performance tuning pragmas for long-lived database connections.
+/// Only use this for connections that persist for the lifetime of the node process
+/// (chainstate, sortition, mempool, etc). Short-lived connections (stacks-inspect,
+/// one-off tools) pay the mmap setup cost per-open without getting the benefit.
+pub fn sqlite_apply_connection_tuning(conn: &Connection) -> Result<(), sqlite_error> {
+    inner_sql_pragma(conn, "mmap_size", &(256 * 1024 * 1024))?; // 256MB
+    inner_sql_pragma(conn, "cache_size", &(-32000))?; // ~32MB
+    inner_sql_pragma(conn, "wal_autocheckpoint", &500)?;
+    Ok(())
 }
 
 /// Get the ancestor block hash of a block of a given height, given a descendent block hash.

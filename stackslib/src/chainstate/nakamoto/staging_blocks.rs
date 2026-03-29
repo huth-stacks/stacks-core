@@ -30,7 +30,8 @@ use crate::chainstate::stacks::index::marf::MarfConnection;
 use crate::chainstate::stacks::Error as ChainstateError;
 use crate::stacks_common::codec::StacksMessageCodec;
 use crate::util_lib::db::{
-    query_row, query_rows, sqlite_open, table_exists, tx_begin_immediate, u64_to_sql,
+    query_row, query_rows, sqlite_apply_connection_tuning, sqlite_open, table_exists,
+    tx_begin_immediate, u64_to_sql,
     Error as DBError,
 };
 
@@ -945,6 +946,7 @@ impl StacksChainState {
             OpenFlags::SQLITE_OPEN_READ_ONLY
         };
         let conn = sqlite_open(path, flags, false)?;
+        sqlite_apply_connection_tuning(&conn)?;
         if !exists {
             for cmd in NAKAMOTO_STAGING_DB_SCHEMA_1.iter() {
                 conn.execute(cmd, NO_PARAMS)?;
