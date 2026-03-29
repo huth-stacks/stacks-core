@@ -136,6 +136,7 @@ impl<S: Signer<T> + Send + 'static, T: SignerEventTrait + 'static> SpawnedSigner
             warn!("Failed to start monitoring metrics server: {e}. Signer will run without metrics.");
         }
         let runloop = RunLoop::new(config.clone());
+        runloop.stacks_client.validate_auth_password();
         let mut signer: RunLoopSigner<S, T> = libsigner::Signer::new(runloop, ev, res_send);
         let running_signer = signer.spawn(endpoint).expect("Failed to spawn signer");
         SpawnedSigner {

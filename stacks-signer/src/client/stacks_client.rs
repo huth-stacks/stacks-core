@@ -43,7 +43,7 @@ use stacks_common::types::chainstate::{
     ConsensusHash, StacksAddress, StacksPrivateKey, StacksPublicKey,
 };
 use stacks_common::types::StacksEpochId;
-use stacks_common::{debug, warn};
+use stacks_common::{debug, error, warn};
 
 use super::SignerSlotID;
 use crate::client::{retry_with_exponential_backoff, ClientError};
@@ -98,6 +98,20 @@ impl From<&GlobalConfig> for StacksClient {
 }
 
 impl StacksClient {
+    /// Attempt an authenticated request to validate the configured auth password
+    pub fn validate_auth_password(&self) {
+        if let Ok(response) = self
+            .stacks_node_client
+            .post(self.block_proposal_path())
+            .header(AUTHORIZATION, self.auth_password.clone())
+            .send()
+        {
+            if matches!(response.status(), reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN) {
+                error!("auth_password does not match the node's auth_token — check your signer and node configs");
+            }
+        }
+    }
+
     /// Create a new signer StacksClient with the provided private key, stacks node host endpoint, version, and auth password
     pub fn new(
         stacks_private_key: &StacksPrivateKey,
