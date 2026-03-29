@@ -115,7 +115,8 @@ fn handle_put_chunk(args: PutChunkArgs) {
 
 fn handle_run(args: RunSignerArgs) {
     debug!("Running signer...");
-    let config = GlobalConfig::try_from(&args.config).unwrap();
+    let config = GlobalConfig::try_from(&args.config)
+        .expect(&format!("failed to load signer config from {}", args.config.display()));
     let spawned_signer = SpawnedSigner::new(config);
     println!("Signer spawned successfully. Waiting for messages to process...");
     // Wait for the spawned signer to stop (will only occur if an error occurs)
@@ -172,7 +173,8 @@ fn handle_generate_stacking_signature(
 }
 
 fn handle_check_config(args: RunSignerArgs) {
-    let config = GlobalConfig::try_from(&args.config).unwrap();
+    let config = GlobalConfig::try_from(&args.config)
+        .expect(&format!("failed to load signer config from {}", args.config.display()));
     println!("Signer version: {}\nConfig: \n{config}", *VERSION_STRING);
 }
 

@@ -25,6 +25,8 @@ pub fn stackerdb_session(
     stackerdb_timeout: Duration,
 ) -> StackerDBSession {
     let mut session = StackerDBSession::new(host, contract.clone(), stackerdb_timeout);
-    session.connect(host.to_string(), contract).unwrap();
+    session.connect(host.to_string(), contract).expect(
+        &format!("failed to connect StackerDB session to host {host}"),
+    );
     session
 }

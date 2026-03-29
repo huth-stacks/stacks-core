@@ -2246,7 +2246,13 @@ impl Signer {
                             warn!("{self}: Failed to insert pending block validation: {e:?}")
                         });
                 } else {
-                    warn!("{self}: Received non-429 status from stacks node: {status}");
+                    if status.as_u16() == 401 || status.as_u16() == 403 {
+                        warn!(
+                            "{self}: Received auth failure status from stacks node: {status}; auth_password may not match node's auth_token"
+                        );
+                    } else {
+                        warn!("{self}: Received non-429 status from stacks node: {status}");
+                    }
                 }
             }
             Err(e) => {

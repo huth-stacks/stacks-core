@@ -25,6 +25,7 @@ use libstackerdb::{
     STACKERDB_MAX_CHUNK_SIZE,
 };
 use stacks_common::codec::StacksMessageCodec;
+use stacks_common::{debug, warn};
 
 use crate::error::RPCError;
 use crate::http::run_http_request;
@@ -241,6 +242,15 @@ impl SignerSession for StackerDBSession {
                 Ok(body_bytes) => {
                     // Verify that the chunk is not too large
                     if body_bytes.len() > limit {
+                        warn!(
+                            "Ignoring oversized StackerDB chunk";
+                            "slot_id" => slot_id,
+                            "err" => %format_args!(
+                                "chunk size {} exceeds limit {}",
+                                body_bytes.len(),
+                                limit
+                            )
+                        );
                         None
                     } else {
                         Some(body_bytes)

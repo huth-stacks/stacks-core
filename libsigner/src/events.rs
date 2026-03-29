@@ -374,7 +374,9 @@ impl<T: SignerEventTrait> EventReceiver<T> for SignerEventReceiver<T> {
     /// Returns the address that was bound.
     /// Errors out if bind(2) fails
     fn bind(&mut self, listener: SocketAddr) -> Result<SocketAddr, EventError> {
-        self.http_server = Some(HttpServer::http(listener).expect("failed to start HttpServer"));
+        self.http_server = Some(HttpServer::http(listener).expect(&format!(
+            "failed to start HttpServer on {listener}; check for port conflicts or another process already bound to this address"
+        )));
         self.local_addr = Some(listener);
         Ok(listener)
     }
@@ -523,10 +525,17 @@ impl<T: SignerEventTrait> TryFrom<StackerDBChunksEvent> for SignerEvent<T> {
         {
             let mut messages = vec![];
             for chunk in event.modified_slots {
-                let Ok(msg) = T::consensus_deserialize(&mut chunk.data.as_slice()) else {
+                let Err(e) = T::consensus_deserialize(&mut chunk.data.as_slice()) else {
+                    let msg = T::consensus_deserialize(&mut chunk.data.as_slice()).unwrap();
+                    messages.push(msg);
                     continue;
                 };
-                messages.push(msg);
+                warn!(
+                    "Ignoring malformed miner chunk";
+                    "slot_id" => chunk.slot_id,
+                    "err" => %e
+                );
+                continue;
             }
             SignerEvent::MinerMessages(messages)
         } else if event.contract_id.name.starts_with(SIGNERS_NAME) && event.contract_id.is_boot() {
@@ -540,11 +549,29 @@ impl<T: SignerEventTrait> TryFrom<StackerDBChunksEvent> for SignerEvent<T> {
                 .modified_slots
                 .iter()
                 .filter_map(|chunk| {
-                    Some((
-                        chunk.slot_id,
-                        chunk.recover_pk().ok()?,
-                        read_next::<T, _>(&mut &chunk.data[..]).ok()?,
-                    ))
+                    let recovered_pk = match chunk.recover_pk() {
+                        Ok(recovered_pk) => recovered_pk,
+                        Err(e) => {
+                            warn!(
+                                "Ignoring malformed signer chunk";
+                                "slot_id" => chunk.slot_id,
+                                "err" => %e
+                            );
+                            return None;
+                        }
+                    };
+                    let message = match read_next::<T, _>(&mut &chunk.data[..]) {
+                        Ok(message) => message,
+                        Err(e) => {
+                            warn!(
+                                "Ignoring malformed signer chunk";
+                                "slot_id" => chunk.slot_id,
+                                "err" => %e
+                            );
+                            return None;
+                        }
+                    };
+                    Some((chunk.slot_id, recovered_pk, message))
                 })
                 .collect();
             SignerEvent::SignerMessages {
