@@ -1124,8 +1124,9 @@ impl EventDispatcher {
                 // removed from config, or because the endpoint URL failed to parse.
                 // Keep the payload in DB rather than deleting — it will be retried on
                 // next restart when the observer may be reconfigured correctly.
-                info!(
-                    "Event dispatcher: no matching observer for pending payload, keeping for retry";
+                warn!(
+                    "Event dispatcher: no matching observer for pending payload, keeping for retry. \
+                     If this observer was intentionally removed, clear the pending_payloads table.";
                     "url" => &request_data.url
                 );
                 continue;
@@ -1324,6 +1325,8 @@ impl EventDispatcher {
         // Only delete if the request succeeded or if retries are disabled (fire-and-forget mode).
         // If make_http_request exhausted retries, keep the event in the DB so
         // retry_pending_payloads can pick it up on restart.
+        // NOTE: Events stranded here will NOT be retried until the node restarts.
+        // A future improvement could add a periodic retry sweep for failed deliveries.
         if http_result.is_err() && !disable_retries {
             warn!(
                 "Event dispatcher: keeping event in DB for retry on restart";
