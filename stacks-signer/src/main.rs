@@ -27,6 +27,7 @@ extern crate serde_json;
 extern crate toml;
 
 use std::io::{self, Write};
+use std::process;
 use std::time::Duration;
 
 use blockstack_lib::util_lib::signed_structured_data::pox4::make_pox_4_signer_key_signature;
@@ -37,7 +38,7 @@ use libsigner::{SignerSession, VERSION_STRING};
 use libstackerdb::StackerDBChunkData;
 use stacks_common::util::hash::to_hex;
 use stacks_common::util::secp256k1::MessageSignature;
-use stacks_common::{debug, error};
+use stacks_common::{debug, error, warn};
 use stacks_signer::cli::{
     Cli, Command, GenerateStackingSignatureArgs, GenerateVoteArgs, GetChunkArgs,
     GetLatestChunkArgs, MonitorSignersArgs, PutChunkArgs, RunSignerArgs, StackerDBArgs,
@@ -113,13 +114,92 @@ fn handle_put_chunk(args: PutChunkArgs) {
     println!("{}", serde_json::to_string(&chunk_ack).unwrap());
 }
 
+fn run_startup_preflight(config: &GlobalConfig) -> Result<(), String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("failed to build startup preflight HTTP client: {e}"))?;
+
+    let auth_url = format!("http://{}/v3/block_proposal", config.node_host);
+    match client
+        .post(&auth_url)
+        .header("Authorization", &config.auth_password)
+        .send()
+    {
+        Ok(resp) if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 => {
+            return Err(
+                "auth_password does not match the node's auth_token; check the signer and node configs"
+                    .to_string(),
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            warn!(
+                "Cannot reach stacks node auth endpoint during startup preflight; continuing";
+                "node_host" => %config.node_host,
+                "error" => %e
+            );
+        }
+    }
+
+    let info_url = format!("http://{}/v2/info", config.node_host);
+    match client.get(&info_url).send() {
+        Ok(resp) => match resp.json::<serde_json::Value>() {
+            Ok(info) => {
+                if let Some(network_id) = info.get("network_id").and_then(|v| v.as_u64()) {
+                    let expected = u64::from(config.to_chain_id());
+                    if network_id != expected {
+                        return Err(format!(
+                            "network mismatch: signer expects network_id {expected} but node reports {network_id}"
+                        ));
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Cannot decode /v2/info response during startup preflight; continuing";
+                    "node_host" => %config.node_host,
+                    "error" => %e
+                );
+            }
+        },
+        Err(e) => {
+            warn!(
+                "Cannot reach stacks node /v2/info during startup preflight; continuing";
+                "node_host" => %config.node_host,
+                "error" => %e
+            );
+        }
+    }
+
+    Ok(())
+}
+
 fn handle_run(args: RunSignerArgs) {
     debug!("Running signer...");
-    let config = GlobalConfig::try_from(&args.config).unwrap();
+    let config = GlobalConfig::try_from(&args.config).unwrap_or_else(|_| {
+        panic!(
+            "failed to load signer config from {}",
+            args.config.display()
+        )
+    });
+    if let Err(e) = run_startup_preflight(&config) {
+        error!("{e}");
+        process::exit(1);
+    }
     let spawned_signer = SpawnedSigner::new(config);
     println!("Signer spawned successfully. Waiting for messages to process...");
     // Wait for the spawned signer to stop (will only occur if an error occurs)
-    let _ = spawned_signer.join();
+    match spawned_signer.join() {
+        Some(_) => {
+            error!("Signer terminated unexpectedly with a terminal result");
+            process::exit(1);
+        }
+        None => {
+            error!("Signer terminated unexpectedly");
+            process::exit(1);
+        }
+    }
 }
 
 fn handle_generate_stacking_signature(
