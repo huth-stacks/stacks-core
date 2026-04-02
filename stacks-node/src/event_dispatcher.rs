@@ -18,13 +18,14 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]
 use std::sync::mpsc::channel;
 #[cfg(test)]
 use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use clarity::vm::costs::ExecutionCost;
 use clarity::vm::events::{FTEventType, NFTEventType, STXEventType};
@@ -162,6 +163,8 @@ pub const PATH_PROPOSAL_RESPONSE: &str = "proposal_response";
 #[cfg(test)]
 static TEST_EVENT_OBSERVER_SKIP_RETRY: LazyLock<TestFlag<bool>> = LazyLock::new(TestFlag::default);
 
+const PENDING_PAYLOAD_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+
 impl EventObserver {
     fn new(endpoint: String, timeout: Duration, disable_retries: bool) -> Self {
         EventObserver {
@@ -176,6 +179,21 @@ struct EventRequestData {
     pub url: String,
     pub payload_bytes: Arc<[u8]>,
     pub timeout: Duration,
+}
+
+#[derive(Debug)]
+struct PendingPayloadReplayState {
+    in_progress: AtomicBool,
+    last_attempt: Mutex<Option<Instant>>,
+}
+
+impl PendingPayloadReplayState {
+    fn new() -> Self {
+        Self {
+            in_progress: AtomicBool::new(false),
+            last_attempt: Mutex::new(None),
+        }
+    }
 }
 
 /// Events received from block-processing.
@@ -216,6 +234,8 @@ pub struct EventDispatcher {
     pub stackerdb_channel: Arc<Mutex<StackerDBChannel>>,
     /// Path to the database where pending payloads are stored.
     db_path: PathBuf,
+    /// Shared replay state so clones coordinate bounded in-process backlog retries.
+    pending_payload_replay_state: Arc<PendingPayloadReplayState>,
 }
 
 /// This struct is used specifically for receiving proposal responses.
@@ -435,6 +455,7 @@ impl EventDispatcher {
             stackerdb_observers_lookup: HashSet::new(),
             block_proposal_observers_lookup: HashSet::new(),
             db_path,
+            pending_payload_replay_state: Arc::new(PendingPayloadReplayState::new()),
         }
     }
 
@@ -1146,6 +1167,7 @@ impl EventDispatcher {
         payload: &serde_json::Value,
         path: &str,
     ) {
+        self.maybe_process_pending_payloads();
         let full_url = Self::get_full_url(event_observer, path);
         let bytes = match Self::get_payload_bytes(payload) {
             Ok(bytes) => bytes,
@@ -1166,6 +1188,50 @@ impl EventDispatcher {
         let id = self.save_to_db(&data);
 
         self.make_http_request_and_delete_from_db(&data, event_observer.disable_retries, id);
+    }
+
+    fn maybe_process_pending_payloads(&self) {
+        if self.registered_observers.is_empty() {
+            return;
+        }
+
+        let now = Instant::now();
+        let should_attempt = {
+            let mut last_attempt = self
+                .pending_payload_replay_state
+                .last_attempt
+                .lock()
+                .expect("FATAL: pending payload replay mutex poisoned");
+            if let Some(last_attempt_time) = *last_attempt {
+                if now.duration_since(last_attempt_time) < PENDING_PAYLOAD_RETRY_INTERVAL {
+                    false
+                } else {
+                    *last_attempt = Some(now);
+                    true
+                }
+            } else {
+                *last_attempt = Some(now);
+                true
+            }
+        };
+
+        if !should_attempt {
+            return;
+        }
+
+        if self
+            .pending_payload_replay_state
+            .in_progress
+            .swap(true, Ordering::SeqCst)
+        {
+            return;
+        }
+
+        debug!("Event dispatcher: replaying pending payload backlog during runtime");
+        self.process_pending_payloads();
+        self.pending_payload_replay_state
+            .in_progress
+            .store(false, Ordering::SeqCst);
     }
 
     fn make_http_request(
