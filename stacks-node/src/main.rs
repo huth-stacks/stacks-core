@@ -29,6 +29,7 @@ pub mod syncctl;
 pub mod tenure;
 
 use std::collections::HashMap;
+use std::net::ToSocketAddrs;
 use std::{env, panic, process};
 
 use backtrace::Backtrace;
@@ -337,9 +338,130 @@ fn main() {
                     process::exit(1);
                 }
             };
+            let config_file_for_checks = config_file.clone();
             match Config::from_config_file(config_file, true) {
-                Ok(_) => {
-                    info!("Loaded config!");
+                Ok(config) => {
+                    info!("Config file: valid");
+                    let mut has_errors = false;
+
+                    let working_dir = &config.node.working_dir;
+                    if std::path::Path::new(working_dir).exists() {
+                        info!("Working directory: exists"; "path" => working_dir);
+                    } else {
+                        error!("Working directory does not exist"; "path" => working_dir);
+                        has_errors = true;
+                    }
+
+                    if let Some(raw_bootstrap_nodes) = config_file_for_checks
+                        .node
+                        .as_ref()
+                        .and_then(|node| node.bootstrap_node.as_ref())
+                    {
+                        let requested_bootstrap_count = raw_bootstrap_nodes
+                            .split(',')
+                            .filter(|part| !part.is_empty())
+                            .count();
+                        let resolved_bootstrap_count = config.node.bootstrap_node.len();
+                        if requested_bootstrap_count > 0 && resolved_bootstrap_count == 0 {
+                            error!(
+                                "Bootstrap node resolution failed for all configured entries";
+                                "configured" => requested_bootstrap_count,
+                                "resolved" => resolved_bootstrap_count
+                            );
+                            has_errors = true;
+                        } else if resolved_bootstrap_count < requested_bootstrap_count {
+                            warn!(
+                                "Some bootstrap nodes could not be resolved";
+                                "configured" => requested_bootstrap_count,
+                                "resolved" => resolved_bootstrap_count
+                            );
+                        }
+                    }
+
+                    if let Some(raw_deny_nodes) = config_file_for_checks
+                        .node
+                        .as_ref()
+                        .and_then(|node| node.deny_nodes.as_ref())
+                    {
+                        let requested_deny_count = raw_deny_nodes
+                            .split(',')
+                            .filter(|part| !part.is_empty())
+                            .count();
+                        let resolved_deny_count = config.node.deny_nodes.len();
+                        if resolved_deny_count < requested_deny_count {
+                            error!(
+                                "Deny node resolution failed for one or more configured entries";
+                                "configured" => requested_deny_count,
+                                "resolved" => resolved_deny_count
+                            );
+                            has_errors = true;
+                        }
+                    }
+
+                    let btc_host = &config.burnchain.peer_host;
+                    let btc_port = config.burnchain.rpc_port;
+                    let btc_addr = format!("{btc_host}:{btc_port}");
+                    match btc_addr.to_socket_addrs() {
+                        Ok(mut addrs) => {
+                            if let Some(addr) = addrs.next() {
+                                match std::net::TcpStream::connect_timeout(
+                                    &addr,
+                                    std::time::Duration::from_secs(5),
+                                ) {
+                                    Ok(_) => info!(
+                                        "Bitcoin RPC: reachable";
+                                        "host" => btc_host,
+                                        "port" => btc_port
+                                    ),
+                                    Err(e) => {
+                                        error!(
+                                            "Bitcoin RPC: unreachable";
+                                            "host" => btc_host,
+                                            "port" => btc_port,
+                                            "error" => %e
+                                        );
+                                        has_errors = true;
+                                    }
+                                }
+                            } else {
+                                error!(
+                                    "Bitcoin RPC: no addresses found";
+                                    "host" => btc_host,
+                                    "port" => btc_port
+                                );
+                                has_errors = true;
+                            }
+                        }
+                        Err(e) => {
+                            error!(
+                                "Bitcoin RPC: cannot resolve host";
+                                "host" => btc_host,
+                                "port" => btc_port,
+                                "error" => %e
+                            );
+                            has_errors = true;
+                        }
+                    }
+
+                    let rpc_bind = &config.node.rpc_bind;
+                    match std::net::TcpListener::bind(rpc_bind) {
+                        Ok(_) => info!("RPC bind: available"; "bind" => rpc_bind),
+                        Err(e) => {
+                            error!(
+                                "RPC bind: unavailable";
+                                "bind" => rpc_bind,
+                                "error" => %e
+                            );
+                            has_errors = true;
+                        }
+                    }
+
+                    if has_errors {
+                        error!("Config check failed");
+                        process::exit(1);
+                    }
+
+                    info!("Config check complete");
                     process::exit(0);
                 }
                 Err(e) => {
